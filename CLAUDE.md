@@ -101,6 +101,15 @@ Los entregables D3, D4 y D5 se generan como Word (.docx) mediante scripts de Nod
 - Manten viva la Model Card en `docs/model_card.md` a medida que avanza el trabajo.
 - Trabaja por pasos pequenos y muestra los cambios antes de aplicarlos.
 
+## 13. Politica de modelos y optimizacion
+
+- Modelo por defecto del proyecto: Sonnet, fijado en `.claude/settings.json`. Protege el limite semanal de Opus para el trabajo rutinario (ETL, preprocesado, modelado, refactors, generacion de documentos).
+- Sube a Opus con `/model` solo para tareas que lo justifican: diseno de la evaluacion, depuracion de un posible leakage, decisiones estadisticas o metodologicas delicadas y revision critica de la memoria. Vuelve a Sonnet despues.
+- Higiene de contexto: usa `/clear` entre tareas no relacionadas y `/compact` dentro de una sesion larga. Evita arrastrar muchos ficheros leidos, porque cada mensaje nuevo carga todo el historico.
+- Idioma: espanol, fijado en `.claude/settings.json`.
+- Vigila la cuota con la barra de estado o `/usage`, sobre todo al empezar y en sesiones largas.
+- Privacidad: no se leen los `.sas7bdat` ni el dataset derivado al contexto (restringido en `.claude/settings.json`). El ETL los procesa en tiempo de ejecucion.
+
 ## Siguiente paso sugerido
 
 Implementar `src/preprocessing/`: un transformador que se ajuste dentro de cada fold con imputacion por mediana o moda cuando el missingness es igual o inferior al 20 por ciento e imputacion iterativa cuando supera el 20 por ciento con patron MAR, estandarizacion de numericas y codificacion one-hot de categoricas, sin fuga entre train y test.
