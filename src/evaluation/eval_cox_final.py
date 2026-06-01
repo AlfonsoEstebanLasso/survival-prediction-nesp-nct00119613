@@ -184,14 +184,27 @@ def _km_at_t(event_arr: np.ndarray, time_arr: np.ndarray,
         return np.nan, np.nan, np.nan
     kmf = KaplanMeierFitter()
     kmf.fit(time_arr, event_observed=event_arr.astype(bool))
-    try:
-        s   = float(kmf.survival_function_at_times([t_ref]).iloc[0])
-        ci  = kmf.confidence_interval_survival_function_at_times([t_ref])
-        lo  = float(ci.iloc[0, 0])
-        hi  = float(ci.iloc[0, 1])
-        return s, lo, hi
-    except Exception:
-        return np.nan, np.nan, np.nan
+
+    # Punto: survival_function_at_times devuelve una pandas Series.
+    s = float(kmf.survival_function_at_times([t_ref]).iloc[0])
+
+    # CI: confidence_interval_ es un DataFrame indexado por el timeline.
+    # Evaluamos la funcion escalonada en t_ref tomando el valor del
+    # ultimo evento anterior o igual a t_ref (interpolacion por la izquierda).
+    ci_df = kmf.confidence_interval_
+    t_km  = ci_df.index.values
+    lo_arr = ci_df.iloc[:, 0].values
+    hi_arr = ci_df.iloc[:, 1].values
+
+    # Indice del ultimo punto del timeline <= t_ref
+    past = t_km <= t_ref
+    if past.any():
+        idx = np.where(past)[0][-1]
+        lo, hi = float(lo_arr[idx]), float(hi_arr[idx])
+    else:
+        lo, hi = 1.0, 1.0   # antes del primer evento
+
+    return s, lo, hi
 
 
 def compute_calibration(
@@ -201,27 +214,46 @@ def compute_calibration(
     n_groups: int = N_CAL_GROUPS,
 ) -> pd.DataFrame:
     """
-    Para cada tiempo de referencia: divide los sujetos en n_groups por probabilidad
-    predicha, calcula media predicha y KM observada en cada grupo.
+    Para cada tiempo de referencia:
+      - Divide los sujetos en n_groups deciles por S predicha OOF.
+      - Calcula la media de S predicha y la KM observada con IC95% en cada decil.
+    La calibracion es correcta cuando los puntos caen sobre la diagonal.
     """
+    # Aseguramos arrays numpy sin indices pandas
+    s_pred = np.asarray(s_pred_col, dtype=float)
+    event  = np.asarray(y["event"], dtype=bool)
+    time   = np.asarray(y["time"],  dtype=float)
+
     rows = []
     for t_ref in ref_times:
-        q_labels = pd.qcut(pd.Series(s_pred_col), n_groups, labels=False, duplicates="drop")
-        for g in sorted(q_labels.dropna().unique()):
-            mask = q_labels == g
-            if mask.sum() < 5:
+        # Asignacion de decil por probabilidad predicha (0 = menor S = mayor riesgo)
+        try:
+            labels = pd.qcut(s_pred, n_groups, labels=False, duplicates="drop")
+        except Exception:
+            continue
+
+        labels_arr = np.asarray(labels, dtype=float)  # NaN donde pd.qcut falla
+
+        for g in np.unique(labels_arr[~np.isnan(labels_arr)]).astype(int):
+            mask = labels_arr == g
+            n_g  = int(mask.sum())
+            if n_g < 5:
                 continue
-            mean_pred = float(s_pred_col[mask].mean())
-            obs, lo, hi = _km_at_t(y["event"][mask], y["time"][mask], t_ref)
+
+            ev_g   = event[mask]
+            ti_g   = time[mask]
+            mean_p = float(s_pred[mask].mean())
+
+            obs, lo, hi = _km_at_t(ev_g, ti_g, t_ref)
             rows.append({
-                "ref_time":   t_ref,
-                "group":      int(g),
-                "n":          int(mask.sum()),
-                "n_events":   int(y["event"][mask].sum()),
-                "mean_pred":  mean_pred,
-                "km_obs":     obs,
-                "km_ci_lo":   lo,
-                "km_ci_hi":   hi,
+                "ref_time":  t_ref,
+                "group":     g,
+                "n":         n_g,
+                "n_events":  int(ev_g.sum()),
+                "mean_pred": mean_p,
+                "km_obs":    obs,
+                "km_ci_lo":  lo,
+                "km_ci_hi":  hi,
             })
     return pd.DataFrame(rows)
 
@@ -232,27 +264,46 @@ def _plot_calibration(
     ep_label: str,
     ax_list: list,
 ) -> None:
-    colors = [C_DARK, C_AMBER, C_GREEN]
-    ref_labels = [f"t = {int(t)} dias" for t in ref_times]
+    colors     = [C_DARK, C_AMBER, C_GREEN]
+    ref_labels = [f"t = {int(round(t))} dias" for t in ref_times]
 
     for ax, t_ref, color, lbl in zip(ax_list, ref_times, colors, ref_labels):
-        sub = calib_df[calib_df["ref_time"] == t_ref].dropna(subset=["km_obs"])
+        # Comparacion aproximada de floats para seleccionar filas del CSV
+        sub = calib_df[np.isclose(calib_df["ref_time"], t_ref, rtol=1e-4)].copy()
+        sub = sub.dropna(subset=["km_obs"])
         if sub.empty:
-            ax.set_visible(False)
+            ax.text(0.5, 0.5, "Sin datos\ndisponibles",
+                    ha="center", va="center", transform=ax.transAxes, color=C_GRAY)
             continue
 
+        # Barras de error: distancia del IC95% al valor central
+        yerr_lo = np.clip(sub["km_obs"] - sub["km_ci_lo"], 0, None)
+        yerr_hi = np.clip(sub["km_ci_hi"] - sub["km_obs"], 0, None)
+
         ax.errorbar(
-            sub["mean_pred"], sub["km_obs"],
-            yerr=[sub["km_obs"] - sub["km_ci_lo"], sub["km_ci_hi"] - sub["km_obs"]],
-            fmt="o", color=color, ms=6, lw=1.5, capsize=4,
-            label=lbl, zorder=3,
+            sub["mean_pred"].values,
+            sub["km_obs"].values,
+            yerr=[yerr_lo.values, yerr_hi.values],
+            fmt="o", color=color, ms=7, lw=1.8, capsize=5,
+            elinewidth=1.4, label=f"Deciles ({lbl})", zorder=3,
         )
-        # Diagonal perfecta
-        lim = [0, 1]
-        ax.plot(lim, lim, "--", color="#AAAAAA", lw=1, label="Calibracion perfecta")
-        ax.set_xlim(0, 1); ax.set_ylim(0, 1)
-        ax.set_xlabel("S(t) predicha (Cox)")
-        ax.set_ylabel("S(t) observada (Kaplan-Meier)")
+        # Diagonal de calibracion perfecta
+        ax.plot([0, 1], [0, 1], "--", color="#999999", lw=1.2,
+                label="Calibracion perfecta", zorder=2)
+
+        # Ajustar limites al rango de los datos con margen
+        margin = 0.05
+        xmin = max(0, sub["mean_pred"].min() - margin)
+        xmax = min(1, sub["mean_pred"].max() + margin)
+        ymin = max(0, sub["km_ci_lo"].min() - margin)
+        ymax = min(1, sub["km_ci_hi"].max() + margin)
+        all_min = min(xmin, ymin)
+        all_max = max(xmax, ymax)
+        ax.set_xlim(all_min, all_max)
+        ax.set_ylim(all_min, all_max)
+
+        ax.set_xlabel("S(t) predicha media por decil (Cox OOF)", fontsize=9)
+        ax.set_ylabel("S(t) observada por Kaplan-Meier", fontsize=9)
         ax.set_title(lbl, color=C_DARK, fontweight="bold")
         ax.legend(fontsize=8)
         ax.set_aspect("equal", adjustable="box")
