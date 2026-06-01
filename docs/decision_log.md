@@ -83,3 +83,33 @@ Resultados sinteticos (valores completos en output/eval_*.csv):
 - OS Boot IBS:     0.182 IC95% [0.172, 0.191]
 - PFS Boot C-index: 0.555 IC95% [0.525, 0.586]
 - PFS Boot IBS:     0.182 IC95% [0.172, 0.192]
+
+### Componente de datos sinteticos (Sprint 6)
+
+**Fecha:** 2026-06-01. **Alcance:** generacion con CTGAN (SDV >= 1.0), evaluacion de
+utilidad TSTR y evaluacion de riesgo de reidentificacion en tres dimensiones.
+
+**Decisiones de diseno:**
+
+- Generador: CTGANSynthesizer de SDV con 300 epocas y n_sintetico = n_real = 479.
+  Columnas binarias (DTH, PFSCD, TXG, EVALPRIM, EVALQOL) y categoricas (SEXCD, B_ECOGN)
+  declaradas explicitamente como "categorical" en los metadatos SDV.
+- TSTR: preprocesador ajustado solo sobre datos sinteticos (escenario TSTR puro);
+  evaluacion sobre cada fold de test real del CV k=5; comparacion directa con TRTR.
+- Membership inference: N=5 shadow models, cada uno ajustado sobre el 70% del real,
+  con 100 epocas. Score = negativo de la distancia Euclidea minima en el espacio
+  preprocesado. AUC y TPR a FPR=0.1 sobre los pares pooled de todos los shadows.
+- K-anonimidad: cuasi-identificadores AGE (bins de 5 anos), SEXCD y B_ECOGN.
+  Para cada registro sintetico, se cuenta el numero de registros reales con la misma
+  combinacion de QI. Se reportan las fracciones k=1, k<=2, k<=5.
+- DCR: distancia Euclidea minima de cada sintetico al real mas cercano, en el espacio
+  preprocesado (ajuste sobre reales para espacio de referencia comun). RRDR (LOO)
+  como referencia del ruido natural del dataset.
+
+**Criterios de aceptacion a priori (privacidad):**
+  - Membership inference: AUC <= 0.60, TPR@FPR=0.1 <= 0.20
+  - K-anonimidad: k=1 < 5%, k<=2 < 10%, k<=5 < 20%
+  - DCR: DCR_p5 / RRDR_mediana >= 0.50
+
+**Advertencia invariante:** los datos sinteticos son exclusivamente para prototipado
+metodologico. No refuerzan las conclusiones del modelo principal de supervivencia.
