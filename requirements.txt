@@ -1,0 +1,15 @@
+# Equivalente pip del entorno. Para reproducibilidad estricta (Sprint 8),
+# congelar versiones exactas con: pip freeze > requirements.lock.txt
+pandas
+numpy
+pyreadstat
+pyarrow
+scikit-learn
+scikit-survival
+lifelines
+xgboost
+lightgbm
+optuna
+shap
+matplotlib
+sdv

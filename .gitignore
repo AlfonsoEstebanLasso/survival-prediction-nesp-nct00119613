@@ -1,0 +1,45 @@
+# Datos clinicos crudos (privacidad por diseno: NUNCA versionar)
+*.sas7bdat
+SAS dataset/
+SAS_dataset/
+
+# Dataset derivado a nivel de sujeto (no versionar)
+*_dataset.csv
+*_dataset.parquet
+*.parquet
+
+# Artefactos generados
+output/
+outputs/*
+!outputs/.gitkeep
+
+# Se PUEDEN versionar metadatos si se desea (forzar con git add -f):
+#   *_dictionary.csv
+#   *_etl_manifest.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.ipynb_checkpoints/
+.pytest_cache/
+.mypy_cache/
+
+# Conda
+.conda/
+
+# Node (generacion de documentos)
+node_modules/
+package-lock.json
+
+# Documentos generados (se regeneran desde scripts)
+docs/build/
+*.docx
+
+# Sistema operativo y editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,24 @@
+name: tfg-nesp
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pandas
+  - numpy
+  - pyreadstat
+  - pyarrow
+  - scikit-learn
+  - scikit-survival
+  - lifelines
+  - xgboost
+  - lightgbm
+  - optuna
+  - shap
+  - matplotlib
+  - jupyterlab
+  - pip
+  - pip:
+      - sdv
+# Nota: antes del release de D1 (Sprint 8), congelar versiones exactas
+# (por ejemplo con: conda env export --no-builds > environment.yml)
+# para la verificacion de reproducibilidad en entorno limpio (KPI-1).
