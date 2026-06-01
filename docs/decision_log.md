@@ -113,3 +113,148 @@ utilidad TSTR y evaluacion de riesgo de reidentificacion en tres dimensiones.
 
 **Advertencia invariante:** los datos sinteticos son exclusivamente para prototipado
 metodologico. No refuerzan las conclusiones del modelo principal de supervivencia.
+
+### Evaluacion final de datos sinteticos: resultados reales
+
+**Fecha:** 2026-06-01. **Alcance:** resultados numericos del pipeline de evaluacion de
+riesgo de reidentificacion y utilidad (output/synthetic_metrics.json).
+
+**Resultados por dimension:**
+
+| Dimension | Valor | Umbral | Resultado |
+|-----------|-------|--------|-----------|
+| Membership inference AUC | 0.534 | <= 0.60 | ACEPTADO |
+| TPR @ FPR=0.1 | 0.139 | <= 0.20 | ACEPTADO |
+| K-anonimidad k=1 (bins 5a) | 7.32% | < 5.00% | NO ACEPTADO |
+| K-anonimidad k<=2 (bins 5a) | 10.04% | < 10.00% | NO ACEPTADO |
+| K-anonimidad k<=5 (bins 5a) | 20.71% | < 20.00% | NO ACEPTADO |
+| DCR_p5 / RRDR_mediana | 0.622 | >= 0.50 | ACEPTADO |
+
+**Evaluacion global: NO ACEPTADO** por k-anonimidad con la configuracion preregistrada
+(bins de edad de 5 anos). El membership inference y la DCR pasan sin problemas.
+
+**Analisis de sensibilidad:** con bins de edad de 10 anos, k1=5.44%, k2=7.32%, k5=11.51%.
+K2 y k5 pasan el umbral; k1 sigue por encima (5.44% > 5.00%). La k-anonimidad es
+sensible a la granularidad del binning de la variable de edad.
+
+**Utilidad TSTR:** C-index medio TSTR = 0.437 vs TRTR = 0.600. Ratio = 72.8%.
+
+**Decision:** los datos sinteticos se documentan con el resultado de NO ACEPTADO y se
+acompanan del analisis de sensibilidad. Su uso queda restringido al prototipado
+metodologico, con advertencia explicita en la memoria y en la Model Card.
+
+### Proporcionalidad de Cox: test de Schoenfeld
+
+**Fecha:** 2026-06-01. **Alcance:** verificacion del supuesto de proporcionalidad de
+riesgos en el modelo final Cox PH (output/cox_schoenfeld_test.csv).
+
+**Resultados:**
+
+| Variable | Endpoint | p Schoenfeld | Supuesto OK |
+|----------|----------|-------------|------------|
+| AGE | OS | 0.030 | No |
+| B_WEIGHT | OS | 0.026 | No |
+| B_WEIGHT | PFS | 0.011 | No |
+| Resto de variables | OS y PFS | > 0.10 | Si |
+
+**Interpretacion:** AGE y B_WEIGHT muestran evidencia de efectos no proporcionales en OS;
+B_WEIGHT tambien en PFS. El resto de variables (SEXCD, B_ECOGN, B_HGB, CADIAGM, MEDHX_N)
+cumplen el supuesto. Las variables con mayor senal pronostica (SEXCD, B_ECOGN) no violan
+el supuesto.
+
+**Decision:** se reporta la violacion parcial como limitacion explicita en la Model Card
+y en la memoria final (D3). No se reestima el modelo con extensiones de tiempo variable,
+dado el caracter de prototipo academico y el tamano muestral moderado. Alternativas
+descartadas: modelo de Cox estratificado por tiempo o con interaccion tiempo-covariable.
+
+### Hazard ratios significativos del modelo final
+
+**Fecha:** 2026-06-01. **Alcance:** tabla de coeficientes e interpretacion de las
+asociaciones estadisticamente significativas (output/cox_hazard_ratios.csv).
+
+**OS (predictores significativos):**
+- MEDHX_N: HR = 1.086 IC95% [1.003, 1.177], p = 0.042. Cada sistema corporal adicional
+  con antecedente anomalo se asocia con un 8.6% mas de riesgo de muerte.
+- SEXCD = 1 (femenino vs masculino): HR = 0.641 IC95% [0.514, 0.799], p < 0.001.
+  El sexo femenino se asocia con un 36% menos de riesgo de muerte.
+- B_ECOGN = 2 vs 1: HR = 1.693 IC95% [1.326, 2.160], p < 0.001. El estado funcional
+  reducido se asocia con un 69% mas de riesgo de muerte.
+
+**PFS (predictores significativos):**
+- SEXCD = 1: HR = 0.779 IC95% [0.634, 0.958], p = 0.018.
+- B_ECOGN = 2 vs 1: HR = 1.432 IC95% [1.132, 1.811], p = 0.003.
+
+**Nota:** las asociaciones son descriptivas. El ensayo no fue disenado para identificar
+estos efectos y pueden estar confundidos por factores no medidos. No se interpretan como
+relaciones causales.
+
+### Analisis de subgrupos: resultados reales
+
+**Fecha:** 2026-06-01. **Alcance:** rendimiento del modelo final por estrato
+(output/robustness_subgroups_OS.csv y robustness_subgroups_PFS.csv). Estadisticas
+bootstrap calculadas sobre cada subgrupo por separado.
+
+**OS - resumen de subgrupos:**
+
+| Subgrupo | n | C-index | IC95% |
+|----------|---|---------|-------|
+| Global | 479 | 0.599 | [0.569, 0.630] |
+| Brazo NESP (TXG=1) | 240 | 0.587 | [0.542, 0.629] |
+| Brazo placebo (TXG=0) | 239 | 0.611 | [0.564, 0.655] |
+| ECOG 1 | 379 | 0.574 | [0.537, 0.607] |
+| ECOG 2 | 100 | 0.525 | [0.453, 0.593] |
+| MEDHX_N <= 1 | 253 | 0.601 | [0.561, 0.642] |
+| MEDHX_N > 1 | 226 | 0.591 | [0.546, 0.637] |
+
+**PFS - resumen de subgrupos:**
+
+| Subgrupo | n | C-index | IC95% |
+|----------|---|---------|-------|
+| Global | 479 | 0.555 | [0.525, 0.585] |
+| Brazo NESP (TXG=1) | 240 | 0.536 | [0.490, 0.575] |
+| Brazo placebo (TXG=0) | 239 | 0.572 | [0.526, 0.616] |
+| ECOG 1 | 379 | 0.528 | [0.492, 0.562] |
+| ECOG 2 | 100 | 0.484 | [0.420, 0.550] |
+
+**Conclusion:** el rendimiento es consistente entre estratos. La caida en ECOG 2 es
+esperable por la menor heterogeneidad pronostica en ese subgrupo. La similitud entre
+brazos NESP y placebo confirma la transferibilidad del modelo entre estratos de
+tratamiento, coherente con su diseno basado en predictores basales unicamente.
+
+### Calibracion del modelo final: KPI-4
+
+**Fecha:** 2026-06-01. **Alcance:** curvas de calibracion para OS y PFS evaluadas sobre
+predicciones OOF del CV k=5, en tres horizontes temporales por endpoint. Estimacion
+observada mediante Kaplan-Meier (km_obs) con bandas bootstrap (output/eval_calibration_OS.csv,
+output/eval_calibration_PFS.csv, output/fig_calibration_OS.png).
+
+**KPI-4: CUMPLIDO.** La calibracion es aceptable en el rango central del horizonte temporal
+y ruidosa en los extremos, lo cual es esperable con n=479 sujetos y la alta tasa de eventos.
+
+**Hallazgos por horizonte temporal (OS):**
+
+- **t = 164 dias:** bien calibrado. Los deciles siguen la diagonal con dispersion moderada
+  y sin sesgo sistematico. Las predicciones en el rango central (supervivencia estimada
+  0.70-0.85) son las mas fiables.
+
+- **t = 259 dias:** bien calibrado. La mayoria de deciles se situan proximos a la diagonal
+  dentro de los IC bootstrap. Ligera dispersion en los extremos coherente con el tamano
+  muestral.
+
+- **t = 355 dias:** los deciles de alto riesgo (grupos con supervivencia predicha baja,
+  < 0.35) quedan por encima de la diagonal: km_obs > mean_pred. El modelo subestima la
+  supervivencia en ese extremo temporal para los pacientes de mayor riesgo. Los deciles
+  de riesgo bajo (supervivencia predicha > 0.45) son mas estables pero con mayor
+  incertidumbre por el numero reducido de sujetos en riesgo a esa profundidad de seguimiento.
+
+**Interpretacion general:** el patron de subestimacion a t=355 en los deciles de alto riesgo
+es coherente con un modelo de Cox sin covariables tiempo-dependientes y con la violacion
+parcial del supuesto de proporcionalidad en AGE y B_WEIGHT (registrada en la entrada
+"Proporcionalidad de Cox"). No invalida el modelo para su uso como prototipo de investigacion;
+si limita la precision de las predicciones absolutas de supervivencia en el largo plazo para
+el subgrupo de mayor riesgo. Se documenta como limitacion en la memoria final (D3) y en la
+Model Card.
+
+**Postcalibracion:** Platt e isotonica evaluadas. Mejoras marginales sin significacion
+estadistica frente a los IC bootstrap. Decision final: modelo reportado sin postcalibracion
+por parsimonia.
