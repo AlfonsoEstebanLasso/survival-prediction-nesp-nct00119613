@@ -32,6 +32,8 @@ import pandas as pd
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.models.cv_utils import SEED
+
 OUTPUT_DIR   = PROJECT_ROOT / "output"
 DATASET_PATH = OUTPUT_DIR / "nesp_nct00119613_dataset.csv"
 
@@ -182,7 +184,7 @@ def print_table(df: pd.DataFrame) -> None:
 
 def main() -> int:
     logger = setup_logger()
-    np.random.seed(42)
+    np.random.seed(SEED)
 
     if not DATASET_PATH.exists():
         logger.error("Dataset no encontrado: %s. Ejecuta el ETL primero.", DATASET_PATH)
