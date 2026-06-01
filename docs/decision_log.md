@@ -33,3 +33,53 @@ Se evaluan Platt e isotonica. Si las mejoras son marginales y no significativas 
 
 ### Valores ilustrativos frente a reales
 Los numeros de PEC3 son ilustrativos. La memoria final reportara los valores reales del pipeline.
+
+### Seleccion del modelo final: Cox proporcional (parsimonia)
+
+**Fecha:** 2026-06-01. **Decision:** el modelo final es el Cox proporcional de Harrell,
+retenido por parsimonia. Ningun candidato mejora de forma estadisticamente significativa
+el baseline segun el criterio de seleccion fijado a priori (C-index + IBS + CV%).
+
+**Resultados reales del pipeline (CV k=5, bootstrap n=1000):**
+
+| Modelo   | OS C-index (CV)     | OS IBS (CV)         | PFS C-index (CV)    |
+|----------|---------------------|---------------------|---------------------|
+| Cox PH   | 0.600 +/- 0.042     | 0.182 +/- 0.013     | 0.552 +/- 0.028     |
+| RSF      | 0.593 +/- 0.027     | 0.181 +/- 0.011     | 0.544 +/- 0.024     |
+| XGBoost  | 0.549 +/- 0.030     | 0.187 +/- 0.014     | 0.528 +/- 0.030     |
+
+**Justificacion detallada:**
+
+- **RSF** es el mejor candidato en terminos de discriminacion equivalente a Cox (diferencia
+  de C-index OS = 0.007, inferior al nivel de ruido del CV) y mayor estabilidad entre folds
+  (CV% = 4.5% frente a 7.0% de Cox). Sin embargo, el intervalo bootstrap del C-index se solapa
+  completamente con el de Cox: RSF IC95% [0.562, 0.621] frente a Cox IC95% [0.567, 0.629]. La
+  diferencia no es estadisticamente significativa. El IBS es practicamente identico (0.181 vs
+  0.182). Aplicando el principio de parsimonia, no hay justificacion para sustituir Cox por RSF.
+- **XGBoost** queda por detras en ambos endpoints. Con n=479 y 7 predictores, el early
+  stopping activa tras 1-30 arboles en la mayoria de folds, indicando que la senal disponible
+  no sustenta la capacidad de un modelo gradient-boosted. Los intervalos bootstrap no se solapan
+  favorablemente con Cox.
+
+**KPI-3 (mejora sobre baseline): NO CUMPLIDO.** Este es un hallazgo honesto y esperado.
+Con n=479, 7 predictores basales y alta tasa de eventos (83% OS), la superficie de decision
+es practicamente lineal. El supuesto de proporcionalidad de Cox se ajusta bien a estos datos
+y los modelos no lineales no tienen ventaja en esta cohorte. Se documenta como limitacion
+explicitamente en la memoria final (D3) y en la Model Card.
+
+**Alternativa descartada:** usar RSF como modelo final pese a la equivalencia estadistica.
+Razon: el coste interpretativo (no hay coeficientes directamente interpretables) no se justifica
+ante la ausencia de ganancia significativa en discriminacion ni en calibracion.
+
+### Evaluacion del modelo final: metricas reales OS (primario) y PFS (secundario)
+
+**Fecha:** 2026-06-01. **Alcance:** curvas de calibracion con bandas bootstrap, Brier Score
+a lo largo del tiempo, AUC dinamica acumulada con bandas bootstrap. Todas las metricas se
+calculan sobre predicciones OOF (out-of-fold) del CV k=5 para evitar sobreajuste.
+
+Resultados sinteticos (valores completos en output/eval_*.csv):
+
+- OS Boot C-index: 0.599 IC95% [0.567, 0.629]
+- OS Boot IBS:     0.182 IC95% [0.172, 0.191]
+- PFS Boot C-index: 0.555 IC95% [0.525, 0.586]
+- PFS Boot IBS:     0.182 IC95% [0.172, 0.192]
