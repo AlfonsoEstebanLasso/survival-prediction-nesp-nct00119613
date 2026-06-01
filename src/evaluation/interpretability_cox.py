@@ -164,7 +164,7 @@ def build_hr_table(cph: CoxPHFitter, ep_name: str) -> pd.DataFrame:
     s = s.reset_index(drop=True)
     # Significacion
     s["sig"] = s["p_valor"].apply(
-        lambda p: "***" if p < 0.001 else ("**" if p < 0.01 else ("*" if p < 0.05 else ""))
+        lambda p: "***" if p < 0.001 else ("**" if p < 0.01 else ("*" if p < 0.05 else "ns"))
     )
     return s[["endpoint","variable","display_name","log_HR","HR","HR_CI_lo","HR_CI_hi","p_valor","sig"]]
 
