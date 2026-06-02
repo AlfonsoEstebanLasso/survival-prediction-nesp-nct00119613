@@ -607,7 +607,7 @@ const refs = [
   "Union Europea. Reglamento (UE) 2016/679, General de Proteccion de Datos (RGPD). Diario Oficial de la Union Europea, 2016.",
   "Jefatura del Estado de Espana. Ley Organica 3/2018 de Proteccion de Datos Personales y garantia de los derechos digitales (LOPDGDD). Boletin Oficial del Estado, 2018.",
   "Union Europea. Reglamento (UE) 2024/1689 por el que se establecen normas armonizadas en materia de inteligencia artificial (AI Act). Diario Oficial de la Union Europea, 2024.",
-  "Agencia Espanola de Proteccion de Datos (AEPD). Orientaciones y garantias en los procedimientos de anonimizacion de datos personales. AEPD, 2019.",
+  "Agencia Espanola de Proteccion de Datos (AEPD). Orientaciones y garantias en los procedimientos de anonimizacion de datos personales. AEPD, 2016.",
   "Polsterl, Sebastian. scikit-survival: A Library for Time-to-Event Analysis Built on Top of scikit-learn. Journal of Machine Learning Research, paginas 1 a 6, volumen 21, 2020.",
   "Davidson-Pilon, Cameron. lifelines: Survival Analysis in Python. Journal of Open Source Software, volumen 4, 2019.",
   "Project Data Sphere. Plataforma de acceso a datos de ensayos clinicos oncologicos. Consultado en 2026.",
