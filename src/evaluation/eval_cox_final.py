@@ -72,7 +72,7 @@ N_BOOT      = 1000     # bootstrap para Brier y AUC
 N_BOOT_CAL  = 500      # bootstrap para calibración (mas caro por KM interna)
 ENDPOINTS   = {
     "OS":  {"event": "DTH",   "time": "DTHDY",  "label": "OS (tiempo hasta muerte)"},
-    "PFS": {"event": "PFSCD", "time": "PFSDY",  "label": "SLP (supervivencia libre de progresion)"},
+    "PFS": {"event": "PFSCD", "time": "PFSDY",  "label": "SLP (supervivencia libre de progresión)"},
 }
 DATASET_PATH = PROJECT_ROOT / "output" / "nesp_nct00119613_dataset.csv"
 OUTPUT_DIR   = PROJECT_ROOT / "output"
