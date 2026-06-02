@@ -3,6 +3,9 @@
 SAS dataset/
 SAS_dataset/
 
+# Documentos fuente de Project Data Sphere (terminos de uso: NUNCA versionar)
+references/
+
 # Dataset derivado a nivel de sujeto (no versionar)
 *_dataset.csv
 *_dataset.parquet
