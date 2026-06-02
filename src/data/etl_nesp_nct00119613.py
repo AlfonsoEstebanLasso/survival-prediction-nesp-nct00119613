@@ -10,7 +10,12 @@ Proposito
 Entradas (ficheros SAS, resueltos sin distinguir mayusculas/minusculas)
     c_keyvar.sas7bdat   espina: SUBJID, demografia y baseline (AGE, SEXCD, B_ECOGN,
                         B_HGB), brazo de aleatorizacion (TXG) y flags de evaluabilidad
-    a_eendpt.sas7bdat   endpoints de supervivencia (DTH, DTHDY, PFSCD, PFSDY)
+    a_eendpt.sas7bdat   endpoints de supervivencia (DTH, DTHDY, PFSCD, PFSDY). Estas cuatro
+                        columnas son de seguimiento completo hasta el corte del estudio:
+                        se verifico que son identicas, sujeto a sujeto, en a_eendpt,
+                        a_eendfu y a_eendes (los tres datasets de analisis comparten el
+                        mismo corte de supervivencia). La supervivencia es endpoint
+                        co-primario del ensayo segun el protocolo.
     c_bchar.sas7bdat    peso basal (B_WEIGHT)
     c_diag.sas7bdat     tiempo desde el diagnostico (CADIAGM)
     c_medhis.sas7bdat   historia medica (formato largo) para la covariable derivada
@@ -34,9 +39,9 @@ Transformaciones
 Control anti-leakage
     Solo se incorporan variables basales (pre-tratamiento). Se excluyen de forma
     explicita las tablas longitudinales o post-basales (c_lesion, c_radio, c_trans,
-    c_vitals) y las covariables documentadas de varianza cero en esta cohorte
-    (RACECD, TUMORCD, EXTENTCD, CHDCLASS). El motivo de cada exclusion queda
-    registrado en el manifiesto.
+    c_vitals) y las covariables constantes en esta cohorte: TUMORCD, EXTENTCD y CHDCLASS
+    son invariantes por los criterios de inclusion del protocolo, y RACECD es de varianza
+    cero observada. El motivo de cada exclusion queda registrado en el manifiesto.
 
 Uso (por ejemplo, desde la linea de comandos en Windows)
     python etl_nesp_nct00119613.py
@@ -79,6 +84,7 @@ OUTPUT_STEM = "nesp_nct00119613"
 SOURCES = {
     "spine":     ("c_keyvar.sas7bdat", [SUBJECT_KEY, "AGE", "SEXCD", "B_ECOGN",
                                         "B_HGB", "TXG", "EVALPRIM", "EVALQOL"]),
+    # DTH/DTHDY/PFSCD/PFSDY son whole-study (corte del estudio), identicas en a_eendpt, a_eendfu y a_eendes.
     "endpoints": ("a_eendpt.sas7bdat", [SUBJECT_KEY, "DTH", "DTHDY", "PFSCD", "PFSDY"]),
     "weight":    ("c_bchar.sas7bdat",  [SUBJECT_KEY, "B_WEIGHT"]),
     "diag":      ("c_diag.sas7bdat",   [SUBJECT_KEY, "CADIAGM"]),
@@ -107,12 +113,15 @@ COLUMN_ROLES = {
     "EVALQOL":  ("flag_evaluabilidad", "c_keyvar", "Evaluable para el analisis de calidad de vida."),
 }
 
-# Covariables documentadas excluidas por varianza cero en esta cohorte.
+# Covariables excluidas por ser constantes en la cohorte. TUMORCD, EXTENTCD y CHDCLASS
+# son invariantes por los criterios de inclusion del protocolo (cohorte de cancer de
+# pulmon microcitico en estadio extenso tratada con platino y etoposido); RACECD es de
+# varianza cero observada en esta cohorte.
 EXCLUDED_CONSTANTS = [
-    {"variable": "RACECD",   "motivo": "Varianza cero: un unico valor en la cohorte."},
-    {"variable": "TUMORCD",  "motivo": "Varianza cero: un unico tipo tumoral."},
-    {"variable": "EXTENTCD", "motivo": "Varianza cero: todos los sujetos = 10."},
-    {"variable": "CHDCLASS", "motivo": "Varianza cero: una sola clase (ANTINEOPLASTIC AGENTS)."},
+    {"variable": "RACECD",   "motivo": "Varianza cero observada: un unico valor en la cohorte."},
+    {"variable": "TUMORCD",  "motivo": "Invariante por criterio de inclusion: cohorte de cancer de pulmon microcitico (SCLC)."},
+    {"variable": "EXTENTCD", "motivo": "Invariante por criterio de inclusion: todos en estadio extenso (=10)."},
+    {"variable": "CHDCLASS", "motivo": "Invariante por el regimen del protocolo: platino mas etoposido (clase unica, ANTINEOPLASTIC AGENTS)."},
 ]
 
 # Ficheros excluidos por ser longitudinales o post-basales (control anti-leakage).

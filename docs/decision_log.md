@@ -17,13 +17,13 @@ n efectivo = 479. Se aplico validacion cruzada estratificada k=5 con regularizac
 La asignacion TXG se usa como variable de estratificacion y se reporta rendimiento por estrato, no como predictor. Motivo: evitar que el modelo aprenda el efecto del farmaco del estudio en lugar de la heterogeneidad clinica, y permitir analisis de transferibilidad entre estratos.
 
 ### Estrategia de covariables (Estrategia 1)
-Nucleo de 7 predictores basales con senal: AGE, SEXCD, B_ECOGN, B_WEIGHT, CADIAGM, B_HGB y MEDHX_N (comorbilidad derivada). Se excluyen por varianza cero en la cohorte: RACECD, TUMORCD, EXTENTCD, CHDCLASS. Alternativas descartadas: enriquecer con basales adicionales (EPO, LDH, transfusion) y mantener las 11 covariables literales con columnas constantes.
+Nucleo de 7 predictores basales con senal: AGE, SEXCD, B_ECOGN, B_WEIGHT, CADIAGM, B_HGB y MEDHX_N (comorbilidad derivada). Se excluyen por ser constantes en la cohorte: TUMORCD, EXTENTCD y CHDCLASS son invariantes por los criterios de inclusion del protocolo (todos los sujetos son cancer de pulmon microcitico en estadio extenso tratados con platino y etoposido), y RACECD presenta varianza cero observada en esta cohorte. Alternativas descartadas: enriquecer con basales adicionales (EPO, LDH, transfusion) y mantener las 11 covariables literales con columnas constantes.
 
 ### Derivacion de MEDHX_N
 Comorbilidad operacionalizada como numero de sistemas corporales con antecedente anormal (MEDHXYN = 1) por sujeto, rango 0 a 6. El valor 7 de MEDHXYN no cuenta como anomalia.
 
 ### Tamano muestral real
-n = 479 (confirmado por el ETL), no 600. El 600 de informes previos era ilustrativo. La memoria final debe usar 479.
+n = 479 (confirmado por el ETL). El protocolo planifico aproximadamente 600 sujetos (unos 300 por brazo, con analisis final previsto a las 496 muertes); la cohorte disponible en Project Data Sphere comprende 479. La cifra de 600 que aparecia en informes previos corresponde al tamano planificado del ensayo, no a una cantidad ilustrativa. La memoria final usa 479.
 
 ### Criterio de seleccion de modelo (a priori)
 Fijado antes de observar resultados: metrica principal (C-index) mas IBS mas coeficiente de variacion entre folds. Se aplicara a los valores reales del pipeline para confirmar el modelo final.
@@ -336,3 +336,28 @@ src/preprocessing/build_preprocessor.py y la linea de fuentes del paquete D4 (bu
 docs/D4_paquete_transparencia.md), con regeneracion del D4 (0 referencias tras el cambio). Los
 ficheros propios del entorno de trabajo (CLAUDE.md, .claude/settings.json y la seccion del README)
 se tratan aparte por ser configuracion de desarrollo, no codigo del pipeline.
+
+### Verificacion cruzada del pipeline contra el protocolo y el diccionario de variables
+
+**Fecha:** 2026-06-02. **Alcance:** contrastar los supuestos del ETL y de los entregables con
+las dos fuentes primarias del estudio: el protocolo (Amendment 2, 16 julio 2004) y el diccionario
+de variables (Data Definition Table v2).
+
+**Hallazgos confirmados como correctos (sin cambio de codigo):**
+- Endpoints. La supervivencia es endpoint co-primario del ensayo (junto al cambio de hemoglobina).
+  Se verifico de forma agregada que DTH, DTHDY, PFSCD y PFSDY son identicos en los 479 sujetos entre
+  los datasets de analisis a_eendpt (periodo de quimioterapia), a_eendfu (periodo completo hasta la
+  muerte 496) y a_eendes (periodo de tratamiento). El horizonte observado (DTHDY maximo 1208 dias,
+  mediana de OS 261 dias, coherente con la mediana de ~9 meses del protocolo) confirma que son
+  variables de seguimiento completo hasta el corte del estudio. La eleccion de a_eendpt en el ETL es
+  por tanto correcta y equivalente.
+- Anti-leakage. Las 7 covariables de la Estrategia 1 son todas basales o pre-aleatorizacion segun el
+  DDT. Las tablas excluidas (c_lesion, c_radio, c_trans, c_vitals) son longitudinales o post-basales.
+- Brazo. El ensayo es de dos brazos (darbepoetina alfa frente a placebo); el nivel EPO del formato
+  del DDT es residuo del codebook generico y no aplica a este estudio.
+
+**Cambios documentales derivados:** se fija la poblacion exacta del ensayo (cancer de pulmon
+microcitico en estadio extenso, no tratado previamente, con platino y etoposido) en D3, D4 y Model
+Card; se aclara el matiz del tamano muestral (600 planificado frente a 479 disponibles); y se
+reformula la justificacion de las exclusiones de TUMORCD, EXTENTCD y CHDCLASS como invariantes por
+los criterios de inclusion del protocolo (RACECD permanece como varianza cero observada).

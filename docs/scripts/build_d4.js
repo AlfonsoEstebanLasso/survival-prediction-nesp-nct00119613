@@ -425,7 +425,7 @@ A(h2("2.9 Limitaciones"));
 A(bullet("Cohorte de ensayo con criterios de inclusion y exclusion: validez externa limitada."));
 A(bullet("Tamano muestral moderado (n=479)."));
 A(bullet("Predictores basales unicamente, por control anti-leakage."));
-A(bullet("Variables de raza, tipo tumoral y extension constantes en la cohorte (varianza cero, excluidas)."));
+A(bullet("Variables de tipo tumoral, extension y clase de quimioterapia invariantes por los criterios de inclusion del protocolo, y raza de varianza cero observada: todas constantes en la cohorte y excluidas."));
 A(bullet("KPI-3 no cumplido: RSF y XGBoost no mejoran significativamente al Cox proporcional."));
 A(bullet("Violacion parcial del supuesto de proporcionalidad en AGE (OS) y B_WEIGHT (OS y PFS) segun test de Schoenfeld."));
 A(bullet("Alta tasa de eventos PFS (92%) limita la informacion de censura para estimacion de la curva de supervivencia."));

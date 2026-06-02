@@ -248,7 +248,7 @@ Interpretacion: el rendimiento es consistente entre estratos sin caidas abruptas
 - Cohorte de ensayo con criterios de inclusion y exclusion: validez externa limitada.
 - Tamano muestral moderado (n=479).
 - Predictores basales unicamente, por control anti-leakage.
-- Variables de raza, tipo tumoral y extension constantes en la cohorte (varianza cero, excluidas).
+- Variables de tipo tumoral, extension y clase de quimioterapia invariantes por los criterios de inclusion del protocolo, y raza de varianza cero observada: todas constantes en la cohorte y excluidas.
 - KPI-3 no cumplido: RSF y XGBoost no mejoran significativamente al Cox proporcional.
 - Violacion parcial del supuesto de proporcionalidad en AGE (OS) y B_WEIGHT (OS y PFS) segun test de Schoenfeld.
 - Alta tasa de eventos PFS (92%) limita la informacion de censura para estimacion de la curva de supervivencia.
