@@ -13,7 +13,6 @@ Estudiante: Alfonso Esteban Lasso.
 ## Estructura del repositorio
 
 ```
-CLAUDE.md              memoria del proyecto para Claude Code
 src/data/              ETL y generacion de datos sinteticos
 src/preprocessing/     preprocesado dentro de la validacion (anti-leakage)
 src/models/            Cox PH, RSF, XGBoost y comparativa
@@ -175,11 +174,3 @@ por todos los scripts). Para reproducir exactamente los resultados:
 1. Usar el mismo entorno: `conda env create -f environment.yml`.
 2. Colocar los mismos datos crudos en `SAS dataset/`.
 3. Ejecutar los pasos en orden.
-
-## Uso con Claude Code
-
-```bash
-claude
-```
-
-Claude Code leera `CLAUDE.md` y dispondra del contexto metodologico completo.
