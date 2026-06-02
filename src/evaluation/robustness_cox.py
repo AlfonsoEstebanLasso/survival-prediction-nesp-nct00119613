@@ -68,6 +68,9 @@ ENDPOINTS = {
 # Setup
 # ---------------------------------------------------------------------------
 
+# Inicializa el logger del modulo con formato de hora, nivel y mensaje.
+# Entrada: ninguna. Salida: objeto Logger configurado con StreamHandler a stdout.
+# Registra el progreso del analisis de robustez en consola sin dependencia de ficheros de log.
 def setup_logger() -> logging.Logger:
     logger = logging.getLogger("robustness")
     logger.setLevel(logging.INFO)
@@ -79,6 +82,9 @@ def setup_logger() -> logging.Logger:
     return logger
 
 
+# Establece parametros globales de estilo para matplotlib.
+# Entrada: ninguna. Salida: ninguna (efecto colateral sobre plt.rcParams).
+# Garantiza coherencia visual entre todos los graficos del modulo de robustez.
 def _rc() -> None:
     plt.rcParams.update({
         "font.family":     "sans-serif",
@@ -91,6 +97,9 @@ def _rc() -> None:
     })
 
 
+# Guarda una figura matplotlib en disco y cierra el objeto para liberar memoria.
+# Entrada: figura (Figure), ruta de salida (Path o str), resolucion en ppp.
+# Salida: ninguna. Imprescindible en bucles que generan multiples figuras por endpoint.
 def _save(fig, path, dpi=300):
     fig.savefig(path, dpi=dpi, bbox_inches="tight", facecolor="white")
     plt.close(fig)
@@ -100,6 +109,21 @@ def _save(fig, path, dpi=300):
 # Definicion de subgrupos
 # ---------------------------------------------------------------------------
 
+# Define las mascaras booleanas que identifican cada subgrupo clinico de analisis.
+# Entrada: dataframe derivado completo (n = 479 sujetos).
+# Salida: diccionario {nombre_subgrupo: array booleano de longitud n}.
+# Perspectiva de ciencia de datos: la particion en subgrupos permite evaluar si el modelo
+# transfiere su capacidad discriminativa de forma homogenea o presenta heterogeneidad
+# pronostica. Los subgrupos se definen sobre la mediana de variables continuas (corte
+# empirico, sin sesgo de seleccion) y sobre categorias binarias o nominales predefinidas.
+# La inclusion del brazo TXG como subgrupo (NESP vs placebo) permite analizar la
+# transferibilidad entre poblaciones con diferente distribucion de hemoglobina, sin
+# implicar causalidad: TXG es variable de estratificacion y nunca se usa como predictor.
+# Nota oncologica: B_ECOGN 2 vs 1 es el contraste mas relevante para heterogeneidad
+# pronostica en oncologia: ECOG 2 implica mayor limitacion funcional y menor reserva
+# fisiologica, lo que puede reducir la capacidad discriminativa del modelo en ese estrato.
+# El sexo (SEXCD) se incluye como subgrupo de equidad: detectar diferencias en C-index
+# por sexo es un requisito de la perspectiva de genero en modelos de IA en salud.
 def build_subgroups(df: pd.DataFrame) -> dict[str, np.ndarray]:
     """Devuelve mascaras booleanas numpy por subgrupo."""
     age_med     = df["AGE"].median()
@@ -110,7 +134,7 @@ def build_subgroups(df: pd.DataFrame) -> dict[str, np.ndarray]:
 
     sg: dict[str, np.ndarray] = {
         "Global":                               np.ones(len(df), dtype=bool),
-        # Brazo de tratamiento (variable de estratificacion, no predictor)
+        # Brazo de tratamiento: variable de estratificacion incluida solo como subgrupo de transferibilidad, nunca como predictor
         "Brazo NESP (TXG = 1)":                 df["TXG"].values == 1,
         "Brazo placebo (TXG = 0)":              df["TXG"].values == 0,
         # Estado funcional basal (BYVAR: 1 = ECOG 0-1, 2 = ECOG 2)
@@ -140,6 +164,17 @@ def build_subgroups(df: pd.DataFrame) -> dict[str, np.ndarray]:
 # C-index por subgrupo con bootstrap
 # ---------------------------------------------------------------------------
 
+# Calcula el C-index puntual e IC95% bootstrap para un subgrupo definido por una mascara booleana.
+# Entrada: array structured y (event, time), riesgo OOF, mascara de subgrupo, n iteraciones y semilla.
+# Salida: tupla (C-index, IC_lo, IC_hi, n_subgrupo, n_eventos); NaN si el subgrupo no es evaluable.
+# Perspectiva de ciencia de datos: el bootstrap por estrato (n = 1000 remuestreos con reemplazamiento)
+# proporciona IC95% empiricos que reflejan la incertidumbre del C-index dentro de cada subgrupo.
+# Si el IC de un subgrupo no solapa con el IC global, existe evidencia de rendimiento diferencial
+# (transferibilidad limitada). Los umbrales minimos (n >= 10, n_eventos >= 5) evitan estimaciones
+# degeneradas en subgrupos demasiado pequenos. La semilla se modula por la suma de indices del
+# subgrupo para garantizar independencia entre subgrupos manteniendo reproducibilidad exacta.
+# Nota oncologica: el subgrupo ECOG 2 tiene mayor riesgo basal y menor heterogeneidad pronostica,
+# lo que puede reducir el C-index: un C-index mas bajo en ese estrato no implica error del modelo.
 def subgroup_cindex(
     y_all: np.ndarray,
     oof_risk: np.ndarray,
@@ -161,7 +196,7 @@ def subgroup_cindex(
     except Exception:
         return np.nan, np.nan, np.nan, n_sg, n_ev
 
-    rng = np.random.default_rng(seed + idx.sum() % 9999)
+    rng = np.random.default_rng(seed + idx.sum() % 9999)  # Semilla modular por subgrupo: reproducibilidad e independencia entre estratos
     boot = []
     for _ in range(n_boot):
         bi = rng.integers(0, n_sg, n_sg)
@@ -181,6 +216,14 @@ def subgroup_cindex(
 # IBS por subgrupo
 # ---------------------------------------------------------------------------
 
+# Calcula el Integrated Brier Score (IBS) para un subgrupo definido por una mascara booleana.
+# Entrada: array structured y completo, predicciones de supervivencia OOF, tiempos evaluados y mascara.
+# Salida: IBS del subgrupo (float); NaN si el subgrupo no es evaluable (menos de 5 eventos).
+# Perspectiva de ciencia de datos: el IBS mide la calibracion-discriminacion conjunta integrada
+# en el tiempo (0 = perfecto, 0.25 = modelo nulo). Se pasa y_all completo como referencia de
+# censura para la estimacion IPCW (inverse probability of censoring weighting): esto garantiza
+# que la correccion por censura sea consistente con la distribucion global, aunque el calculo
+# de la perdida se restrinja al subgrupo. Subgrupos con alta censura pueden tener IBS inestable.
 def subgroup_ibs(
     y_all: np.ndarray,
     oof_surv: np.ndarray,
@@ -202,6 +245,15 @@ def subgroup_ibs(
 # Tabla de subgrupos
 # ---------------------------------------------------------------------------
 
+# Construye la tabla consolidada de metricas de rendimiento por subgrupo para un endpoint.
+# Entrada: dataframe, array y, predicciones OOF de riesgo y supervivencia, tiempos, nombre del endpoint y logger.
+# Salida: DataFrame con columnas Subgrupo, n, n_eventos, C-index, IC95% y IBS.
+# Perspectiva de ciencia de datos: esta tabla es el instrumento central del analisis de robustez.
+# Permite comparar el rendimiento del modelo global frente a cada subgrupo clinico y detectar
+# grupos en los que el modelo discrimina peor o calibra de forma diferencial. La columna IBS
+# complementa el C-index: un modelo puede discriminar bien (alto C-index) pero calibrar mal
+# (alto IBS) en un subgrupo especifico. El logger registra cada fila en tiempo real para
+# monitorizar el calculo de los 1000 bootstrap por subgrupo, que puede ser lento.
 def compute_subgroup_table(
     df: pd.DataFrame,
     y_all: np.ndarray,
@@ -238,6 +290,18 @@ def compute_subgroup_table(
 # Forest plot de subgrupos
 # ---------------------------------------------------------------------------
 
+# Genera el forest plot de C-index por subgrupo con IC95% bootstrap para OS y PFS.
+# Entrada: diccionario {nombre_endpoint: DataFrame de subgrupos} con OS y PFS.
+# Salida: objeto Figure de matplotlib con un panel unico y dos series de puntos/IC.
+# Perspectiva de ciencia de datos: este forest plot traduce la tabla de subgrupos a una
+# visualizacion que permite detectar de forma inmediata los subgrupos con rendimiento
+# diferencial. Las lineas discontinuas verticales marcan el C-index global de cada endpoint,
+# facilitando la comparacion visual. El offset vertical separa OS y PFS sin solapamiento.
+# La linea punteada en C = 0.5 marca el umbral de modelo sin informacion pronostica.
+# Un IC de subgrupo que no solapa con la linea del C-index global indica transferibilidad
+# diferencial significativa (contexto descriptivo, no test formal de hipotesis).
+# Nota oncologica: en la cohorte NESP, la comparacion NESP vs placebo en este grafico
+# cuantifica la transferibilidad del modelo entre brazos con diferente perfil de hemoglobina.
 def plot_forest_subgroups(
     tables: dict[str, pd.DataFrame],   # {"OS": df_os, "PFS": df_pfs}
 ) -> plt.Figure:
@@ -262,7 +326,7 @@ def plot_forest_subgroups(
         col = ep_colors[ep_name]
         off = offsets[ep_name]
 
-        # CI bars
+        # Dibujar IC95% bootstrap como segmentos horizontales y punto central por subgrupo
         for i in range(n_rows):
             if np.isnan(c[i]):
                 continue
@@ -293,6 +357,22 @@ def plot_forest_subgroups(
 # Analisis de errores por quintil de riesgo
 # ---------------------------------------------------------------------------
 
+# Genera el analisis de errores por percentil de riesgo predicho OOF (quintiles por defecto).
+# Entrada: dataframe, array y, riesgo OOF, supervivencias OOF, tiempos seguros, nombre y etiqueta del endpoint.
+# Salida: tupla (Figure con 2 paneles, DataFrame de estadisticas por quintil).
+# Perspectiva de ciencia de datos: la clasificacion en quintiles de riesgo predicho permite
+# evaluar si el modelo discrimina y calibra de forma monotona a lo largo del espectro de riesgo.
+# Panel 1 (discriminacion): la tasa de evento observada debe crecer monotonamente del quintil 1
+# al 5 si el modelo ordena correctamente a los sujetos por riesgo. Desviaciones de la monotonia
+# indican grupos donde el modelo falla en la ordenacion relativa.
+# Panel 2 (calibracion): se compara la supervivencia media predicha OOF frente a la supervivencia
+# observada por Kaplan-Meier en un tiempo de referencia (mediana de los tiempos de evento).
+# Una brecha sistematica entre la curva predicha y la KM en alguno de los quintiles indica
+# miscalibracion localizada, que no queda capturada por el IBS global.
+# Nota oncologica: en quintiles de alto riesgo (Q4-Q5), la tasa de mortalidad observada suele
+# ser elevada; si el modelo subestima el riesgo ahi, puede comprometer decisiones de seguimiento.
+# Las asociaciones son descriptivas: la diferencia entre quintiles refleja la senal pronostica
+# de las covariables basales, no un efecto causal del riesgo predicho sobre el desenlace.
 def plot_error_by_risk(
     df: pd.DataFrame,
     y: np.ndarray,
@@ -304,7 +384,7 @@ def plot_error_by_risk(
 ) -> plt.Figure:
     _rc()
 
-    # Clasificar en quintiles por riesgo predicho OOF
+    # Clasificar sujetos en quintiles segun su riesgo predicho OOF: grupos de igual tamano aproximado
     q_labels = pd.qcut(oof_risk, N_QUINTILES, labels=False, duplicates="drop")
     q_labels = np.asarray(q_labels, dtype=float)
     n_q = int(np.nanmax(q_labels)) + 1
@@ -322,15 +402,15 @@ def plot_error_by_risk(
         ti_q   = y["time"][mask]
         risk_q = oof_risk[mask]
 
-        # Tasa de evento observada
+        # Tasa de evento observada: proporcion de sujetos con evento en el quintil (discriminacion)
         event_rate = float(ev_q.mean())
 
-        # Supervivencia observada KM en t_ref
+        # Supervivencia observada KM en t_ref: estimador no parametrico de referencia para calibracion
         kmf = KaplanMeierFitter()
         kmf.fit(ti_q, event_observed=ev_q.astype(bool))
         km_at_t = float(kmf.survival_function_at_times([t_ref]).iloc[0])
 
-        # Supervivencia media predicha OOF en t_ref
+        # Supervivencia media predicha OOF en t_ref: promedio de las curvas del Cox por quintil
         pred_surv = float(safe_surv[mask, t_idx].mean())
 
         # Riesgo medio predicho
@@ -393,9 +473,17 @@ def plot_error_by_risk(
 # Main
 # ---------------------------------------------------------------------------
 
+# Orquesta el pipeline completo de analisis de robustez del modelo Cox PH.
+# Entrada: dataset CSV en output/. Salida: tablas CSV y figuras PNG en output/.
+# Perspectiva de ciencia de datos: recupera las predicciones OOF generadas durante la
+# validacion cruzada (collect_oof), calcula el rendimiento por subgrupo con bootstrap
+# y genera el analisis de errores por quintil de riesgo para OS y PFS.
+# La separacion entre el modulo de evaluacion global (eval_cox_final) y este modulo de
+# robustez es deliberada: permite reutilizar las predicciones OOF sin reentrenar el modelo,
+# garantizando coherencia con las metricas reportadas en la memoria.
 def main() -> int:
     logger = setup_logger()
-    np.random.seed(SEED)
+    np.random.seed(SEED)  # Fijacion de semilla global para reproducibilidad del entorno numpy
 
     if not DATASET_PATH.exists():
         logger.error("Dataset no encontrado: %s", DATASET_PATH)

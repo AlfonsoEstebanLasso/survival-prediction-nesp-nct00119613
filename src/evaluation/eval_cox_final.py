@@ -88,6 +88,9 @@ C_GRAY  = "#888888"
 # Utilidades matplotlib
 # ---------------------------------------------------------------------------
 
+# Configura los parametros globales de matplotlib para todas las figuras del modulo.
+# Aplica el estilo corporativo definido en style_guide.md (fuente Arial, rejilla suave,
+# spines superiores y derechos eliminados) garantizando coherencia visual en los PNG exportados.
 def _setup_rcparams() -> None:
     plt.rcParams.update({
         "font.family":       "sans-serif",
@@ -106,6 +109,8 @@ def _setup_rcparams() -> None:
     })
 
 
+# Guarda una figura matplotlib en disco a 300 dpi y la cierra para liberar memoria.
+# Entradas: figura, ruta de salida, resolucion. Salida: fichero PNG en disco.
 def _save(fig: plt.Figure, path: Path, dpi: int = 300) -> None:
     fig.savefig(path, dpi=dpi, bbox_inches="tight", facecolor="white")
     plt.close(fig)
@@ -115,6 +120,15 @@ def _save(fig: plt.Figure, path: Path, dpi: int = 300) -> None:
 # Recolecion OOF
 # ---------------------------------------------------------------------------
 
+# Genera predicciones out-of-fold (OOF) del modelo Cox mediante CV estratificada k=5.
+# Entradas: df con predictores y variables de evento/tiempo, nombres de columnas de
+# evento y tiempo. Salida: diccionario con vector y estructurado, risk scores OOF,
+# matriz de supervivencia OOF en la rejilla global y en la rejilla segura (safe_times).
+# Justificacion: las predicciones OOF evitan el sobreajuste en la evaluacion porque
+# cada sujeto es puntuado por un modelo que no lo vio durante el entrenamiento, lo que
+# proporciona una estimacion imparcial del C-index, IBS y AUC en supervivencia.
+# El pipeline de preprocesado se ajusta dentro de cada fold (fit_transform en train,
+# transform en test) para garantizar el invariante anti-fuga del proyecto.
 def collect_oof(df: pd.DataFrame, event_col: str, time_col: str) -> dict:
     """
     Ejecuta CV k=5 recogiendo predicciones OOF del modelo Cox:
@@ -129,12 +143,13 @@ def collect_oof(df: pd.DataFrame, event_col: str, time_col: str) -> dict:
     # Rejilla de evaluacion mas fina. Se deduplica para evitar que sksurv
     # llame a np.unique internamente y desalinee times con estimate.
     event_times = y["time"][y["event"]]
+    # Rejilla de 50 percentiles (p10-p90) de los tiempos de evento como horizontes de evaluacion.
     global_times = np.unique(np.percentile(
         event_times,
         np.linspace(10.0, 90.0, N_TIME_EVAL),
     ))
 
-    cv = StratifiedKFold(n_splits=K_FOLDS, shuffle=True, random_state=SEED)
+    cv = StratifiedKFold(n_splits=K_FOLDS, shuffle=True, random_state=SEED)  # semilla fija para reproducibilidad de los folds
 
     n_times   = len(global_times)
     oof_risk  = np.zeros(len(df))
@@ -143,7 +158,7 @@ def collect_oof(df: pd.DataFrame, event_col: str, time_col: str) -> dict:
 
     for fold_i, (train_idx, test_idx) in enumerate(cv.split(X, strata)):
         preproc = build_preprocessor()
-        X_tr = preproc.fit_transform(X.iloc[train_idx])
+        X_tr = preproc.fit_transform(X.iloc[train_idx])  # ajuste del preprocesador solo en train (anti-fuga)
         X_te = preproc.transform(X.iloc[test_idx])
 
         y_tr = y[train_idx]
@@ -159,6 +174,8 @@ def collect_oof(df: pd.DataFrame, event_col: str, time_col: str) -> dict:
 
         t_max_per_fold.append(float(y_tr["time"].max()))
 
+    # safe_times: subconjunto de la rejilla global que queda dentro del rango
+    # de todos los folds de entrenamiento, evitando extrapolacion del estimador IPCW.
     t_max_common = min(t_max_per_fold)
     safe_times = global_times[global_times < t_max_common]
     safe_surv  = oof_surv[:, global_times < t_max_common]
@@ -177,6 +194,14 @@ def collect_oof(df: pd.DataFrame, event_col: str, time_col: str) -> dict:
 # Calibracion
 # ---------------------------------------------------------------------------
 
+# Estima la probabilidad de supervivencia observada (Kaplan-Meier) y su IC95% log-log
+# en un tiempo de referencia especifico para un subgrupo de sujetos.
+# Entradas: indicadores de evento, tiempos de seguimiento y horizonte temporal t_ref.
+# Salida: tupla (S_KM, IC_inferior, IC_superior); devuelve NaN si el grupo tiene
+# menos de 5 sujetos o menos de 2 eventos (inestabilidad del estimador KM).
+# Nota oncologica: el estimador Kaplan-Meier es el estandar para la supervivencia
+# observada en oncologia; la formula log-log produce IC mas conservadores y simetricos
+# en las colas, donde el numero de sujetos en riesgo es pequeno.
 def _km_at_t(event_arr: np.ndarray, time_arr: np.ndarray,
               t_ref: float) -> tuple[float, float, float]:
     """KM puntual y IC95% (log-log) en t_ref para un grupo."""
@@ -207,6 +232,16 @@ def _km_at_t(event_arr: np.ndarray, time_arr: np.ndarray,
     return s, lo, hi
 
 
+# Calcula la calibracion del modelo Cox comparando la supervivencia predicha (OOF)
+# con la supervivencia observada (Kaplan-Meier) en cada decil de riesgo.
+# Entradas: vector de S predicha en t_ref para todos los sujetos, y estructurado,
+# array de tiempos de referencia y numero de grupos. Salida: DataFrame con columnas
+# mean_pred (media de S predicha por decil), km_obs, km_ci_lo, km_ci_hi y metadatos.
+# Justificacion: la calibracion por deciles es el estandar en modelos de supervivencia
+# (TRIPOD); un buen modelo produce puntos cercanos a la diagonal S_predicha = S_KM.
+# Nota oncologica: en horizontes temporales largos el estimador KM puede subestimar
+# la supervivencia real en el grupo de alto riesgo por el pequeno numero en riesgo;
+# el IC95% refleja esta incertidumbre y debe interpretarse con cautela.
 def compute_calibration(
     s_pred_col: np.ndarray,
     y: np.ndarray,
@@ -258,6 +293,11 @@ def compute_calibration(
     return pd.DataFrame(rows)
 
 
+# Genera los subplots de calibracion para los tres tiempos de referencia (p25, p50, p75).
+# Entradas: DataFrame de calibracion, array de tiempos de referencia en dias, etiqueta
+# del endpoint y lista de tres ejes matplotlib. No devuelve nada (efecto lateral: rellena los ejes).
+# Cada eje muestra los deciles como puntos con barras de error IC95% KM frente a la diagonal
+# de calibracion perfecta (S_pred = S_KM).
 def _plot_calibration(
     calib_df: pd.DataFrame,
     ref_times: np.ndarray,
@@ -313,6 +353,17 @@ def _plot_calibration(
 # Brier Score a lo largo del tiempo
 # ---------------------------------------------------------------------------
 
+# Calcula el Brier Score a lo largo del tiempo B(t) con IC95% bootstrap (n=1000).
+# Entradas: y estructurado, matriz de supervivencia OOF en safe_times, rejilla de tiempos
+# segura, numero de replicas bootstrap y semilla. Salida: DataFrame con columnas time,
+# brier (Cox OOF), brier_null (modelo nulo KM marginal), ci_lo y ci_hi.
+# Justificacion: el Brier Score es una metrica de calibracion global que cuantifica
+# el error cuadratico medio entre la supervivencia predicha y el estado observado a
+# cada tiempo t; el modelo nulo KM sirve de referencia sin covariables (skill score).
+# Las bandas bootstrap (percentiles 2.5 y 97.5 de n=1000 remuestras con reemplazamiento)
+# cuantifican la incertidumbre de B(t) a lo largo de la rejilla temporal.
+# El estimador IPCW de sksurv requiere que eval_times este estrictamente dentro del
+# rango de tiempos observados para evitar extrapolacion de la censura.
 def compute_brier_curve(
     y: np.ndarray,
     safe_surv: np.ndarray,
@@ -346,6 +397,7 @@ def compute_brier_curve(
     _, bs_cox = brier_score(y, y, eval_surv, eval_times)
 
     # Modelo nulo: predecir la KM marginal para todos (sin covariables)
+    # La KM marginal es el estimador observado de referencia en ausencia de covariables.
     kmf_ref = KaplanMeierFitter()
     kmf_ref.fit(y["time"], event_observed=y["event"])
     s_null = np.column_stack([
@@ -354,8 +406,8 @@ def compute_brier_curve(
     ])
     _, bs_null = brier_score(y, y, s_null, eval_times)
 
-    # Bootstrap
-    rng = np.random.default_rng(seed + 10)
+    # Bootstrap con semilla fija para IC95% del Brier Score puntual en cada tiempo.
+    rng = np.random.default_rng(seed + 10)  # semilla derivada de la semilla global para reproducibilidad
     n = len(y)
     boot_bs = []
     for _ in range(n_boot):
@@ -376,6 +428,9 @@ def compute_brier_curve(
     })
 
 
+# Dibuja la curva B(t) del Cox OOF, las bandas bootstrap IC95% y la referencia nula KM.
+# Entradas: DataFrame de Brier con columnas time/brier/ci_lo/ci_hi/brier_null, etiqueta
+# del endpoint y eje matplotlib. No devuelve nada (efecto lateral: rellena el eje).
 def _plot_brier(
     brier_df: pd.DataFrame,
     ep_label: str,
@@ -401,6 +456,17 @@ def _plot_brier(
 # AUC dinamica acumulada
 # ---------------------------------------------------------------------------
 
+# Calcula la AUC dinamica acumulada a lo largo del tiempo con IC95% bootstrap (n=1000).
+# Entradas: y estructurado, vector de risk scores OOF (log-hazard del Cox), rejilla
+# de tiempos segura, numero de replicas y semilla. Salida: DataFrame con columnas
+# time, auc, ci_lo, ci_hi, mean_auc, mean_ci_lo, mean_ci_hi.
+# Justificacion: la AUC acumulada/dinamica (Uno et al. 2007) mide la capacidad
+# discriminativa del modelo a cada horizonte temporal, superando el C-index estatico
+# al capturar cambios de discriminacion a lo largo del seguimiento. En oncologia,
+# la AUC a tiempos largos puede decaer por el pequeno numero de sujetos en riesgo
+# y la alta proporcion de censuras, lo que las bandas bootstrap ayudan a cuantificar.
+# La referencia IPCW usa el dataset completo como distribucion de pesos (aproximacion
+# estandar cuando las predicciones son OOF y no existe un conjunto de test separado).
 def compute_auc_curve(
     y: np.ndarray,
     oof_risk: np.ndarray,
@@ -423,7 +489,8 @@ def compute_auc_curve(
 
     auc_vals, mean_auc = cumulative_dynamic_auc(y, y, oof_risk, eval_times)
 
-    rng = np.random.default_rng(seed + 20)
+    # Bootstrap con semilla derivada para IC95% de AUC(t) y de la AUC media integrada.
+    rng = np.random.default_rng(seed + 20)  # semilla separada de la usada en Brier para independencia
     n = len(y)
     boot_auc = []
     boot_mean = []
@@ -449,6 +516,9 @@ def compute_auc_curve(
     })
 
 
+# Dibuja la curva AUC(t) acumulada/dinamica con bandas IC95% bootstrap y referencia aleatoria.
+# Entradas: DataFrame de AUC, etiqueta del endpoint y eje matplotlib.
+# No devuelve nada (efecto lateral: rellena el eje). Anota la AUC media integrada con su IC95%.
 def _plot_auc(
     auc_df: pd.DataFrame,
     ep_label: str,
@@ -489,6 +559,14 @@ def _plot_auc(
 # Evaluacion completa por endpoint
 # ---------------------------------------------------------------------------
 
+# Orquesta la evaluacion completa de un endpoint (OS o PFS):
+# recolecta predicciones OOF, calcula calibracion, Brier Score y AUC dinamica,
+# guarda tablas CSV y genera cuatro figuras PNG en output/.
+# Entradas: df con todos los sujetos, nombre del endpoint, columnas de evento y tiempo,
+# etiqueta legible y logger. No devuelve nada (salidas en disco).
+# Justificacion: centralizar la evaluacion por endpoint permite reutilizar el mismo
+# esquema metodologico (mismos tiempos de referencia p25/p50/p75, mismos n_boot,
+# misma rejilla de tiempos) tanto para OS como para PFS, garantizando comparabilidad.
 def run_endpoint_eval(
     df: pd.DataFrame,
     ep_name: str,
@@ -508,7 +586,7 @@ def run_endpoint_eval(
     safe_times    = oof["safe_times"]
     global_times  = oof["global_times"]
 
-    # Tiempos de referencia para calibracion: p25, p50, p75 de tiempos de evento
+    # Tiempos de referencia para calibracion: p25, p50, p75 de tiempos de evento (horizontes en dias).
     ref_times = np.percentile(y["time"][y["event"]], [25, 50, 75])
     logger.info("  Tiempos de referencia (dias): %s", np.round(ref_times).astype(int))
 
@@ -618,6 +696,8 @@ def run_endpoint_eval(
 # Main
 # ---------------------------------------------------------------------------
 
+# Configura y devuelve el logger del modulo con formato de hora y nivel.
+# Evita duplicar handlers si la funcion se llama mas de una vez en la misma sesion.
 def setup_logger() -> logging.Logger:
     logger = logging.getLogger("eval_cox")
     logger.setLevel(logging.INFO)
@@ -630,9 +710,13 @@ def setup_logger() -> logging.Logger:
     return logger
 
 
+# Punto de entrada principal: carga el dataset derivado, lanza la evaluacion para
+# cada endpoint definido en ENDPOINTS y retorna 0 si todo ha ido bien, 1 si el
+# dataset no existe. La semilla global numpy se fija antes de cualquier operacion
+# para garantizar la reproducibilidad de las replicas bootstrap.
 def main() -> int:
     logger = setup_logger()
-    np.random.seed(SEED)
+    np.random.seed(SEED)  # semilla global fija para numpy; las semillas de los RNG locales son derivadas
 
     if not DATASET_PATH.exists():
         logger.error("Dataset no encontrado: %s", DATASET_PATH)

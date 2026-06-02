@@ -46,6 +46,10 @@ XGB_JSON = OUTPUT_DIR / "xgb_metrics.json"
 # Logger
 # ---------------------------------------------------------------------------
 
+# Configura y devuelve el logger del modulo de comparacion con formato de hora y nivel.
+# Entrada: ninguna. Salida: instancia de logging.Logger lista para usar.
+# Permite auditar el flujo de carga o generacion de resultados de cada modelo
+# sin alterar la logica de calculo ni los datos.
 def setup_logger() -> logging.Logger:
     logger = logging.getLogger("compare_models")
     logger.setLevel(logging.INFO)
@@ -61,6 +65,13 @@ def setup_logger() -> logging.Logger:
 # Cargar o generar resultados de cada modelo
 # ---------------------------------------------------------------------------
 
+# Carga los resultados del modelo Cox desde COX_JSON si ya existen,
+# o los genera ejecutando run_endpoint() de cox_baseline para OS y PFS.
+# Entrada: dataset derivado df y logger. Salida: diccionario con resultados
+#   por endpoint {"OS": {...}, "PFS": {...}} en el formato de cox_baseline.
+# Estrategia de cache: evita repetir el entrenamiento cuando el JSON existe,
+# lo que es relevante dado el coste computacional del bootstrap n=1000.
+# La generacion en demanda aplica el mismo esquema CV k=5 y anti-fuga que el baseline.
 def load_or_run_cox(df: pd.DataFrame, logger: logging.Logger) -> dict:
     if COX_JSON.exists():
         logger.info("Cox: cargando resultados existentes de %s", COX_JSON.name)
@@ -78,6 +89,13 @@ def load_or_run_cox(df: pd.DataFrame, logger: logging.Logger) -> dict:
     return results
 
 
+# Carga los resultados del modelo Random Survival Forest desde RSF_JSON si ya existen,
+# o los genera ejecutando run_endpoint() de rsf_model para OS y PFS.
+# Entrada: dataset derivado df y logger. Salida: diccionario con resultados
+#   por endpoint en el mismo formato que Cox (CV k=5, bootstrap n=1000).
+# El RSF es un modelo de referencia no lineal basado en arboles de decision
+# adaptados a datos de supervivencia con censura, mas flexible que Cox.
+# La estrategia de cache evita reentrenar cuando los resultados ya estan en disco.
 def load_or_run_rsf(df: pd.DataFrame, logger: logging.Logger) -> dict:
     if RSF_JSON.exists():
         logger.info("RSF: cargando resultados existentes de %s", RSF_JSON.name)
@@ -95,6 +113,13 @@ def load_or_run_rsf(df: pd.DataFrame, logger: logging.Logger) -> dict:
     return results
 
 
+# Carga los resultados del modelo XGBoost con perdida de supervivencia desde
+# XGB_JSON si ya existen, o los genera ejecutando run_endpoint() de xgb_model.
+# Entrada: dataset derivado df y logger. Salida: diccionario con resultados
+#   por endpoint (OS y PFS) en el mismo formato que Cox y RSF.
+# XGBoost con perdida de supervivencia (AFT o Cox partial likelihood) es el
+# modelo de mayor capacidad del proyecto; se compara contra el baseline Cox
+# y el RSF aplicando el criterio a priori: C-index + IBS + CV% de estabilidad.
 def load_or_run_xgb(df: pd.DataFrame, logger: logging.Logger) -> dict:
     if XGB_JSON.exists():
         logger.info("XGBoost: cargando resultados existentes de %s", XGB_JSON.name)
@@ -116,6 +141,14 @@ def load_or_run_xgb(df: pd.DataFrame, logger: logging.Logger) -> dict:
 # Construir tabla comparativa
 # ---------------------------------------------------------------------------
 
+# Construye la tabla comparativa de los tres modelos en formato largo
+# (una fila por modelo x endpoint), con las metricas CV y bootstrap.
+# Entrada: diccionarios de resultados de Cox, RSF y XGBoost (mismo formato).
+# Salida: DataFrame con columnas de C-index y IBS (media, std, CV%, boot IC95%)
+#   para los endpoints OS y PFS.
+# La tabla es el artefacto principal de la comparacion: permite aplicar el
+# criterio de seleccion a priori (mayor C-index, menor IBS, menor CV%)
+# registrado en decision_log.md para identificar el modelo final del proyecto.
 def build_table(cox: dict, rsf: dict, xgb: dict) -> pd.DataFrame:
     rows = []
     for ep in ("OS", "PFS"):
@@ -146,6 +179,12 @@ def build_table(cox: dict, rsf: dict, xgb: dict) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+# Imprime en consola la tabla comparativa con formato alineado por columnas,
+# agrupada por endpoint (OS y PFS), con C-index y IBS del CV y bootstrap.
+# Entrada: DataFrame generado por build_table().
+# Salida: ninguna (impresion a stdout).
+# Facilita la revision rapida de resultados y la transcripcion a la memoria D3
+# sin necesidad de abrir los ficheros CSV.
 def print_table(df: pd.DataFrame) -> None:
     sep = "=" * 88
     print(f"\n{sep}")
@@ -182,9 +221,16 @@ def print_table(df: pd.DataFrame) -> None:
 # Main
 # ---------------------------------------------------------------------------
 
+# Punto de entrada del script de comparacion de modelos.
+# Lee el dataset derivado, carga o genera los resultados de Cox, RSF y XGBoost,
+# construye la tabla comparativa en formato largo y ancho, la persiste en CSV
+# y aplica el criterio de seleccion a priori para identificar el mejor modelo
+# por endpoint segun C-index, IBS y coeficiente de variacion entre folds.
+# Entrada: ninguna (usa constantes del modulo).
+# Salida: 0 si exito, 1 si el dataset no existe.
 def main() -> int:
     logger = setup_logger()
-    np.random.seed(SEED)
+    np.random.seed(SEED)  # semilla global para reproducibilidad de numpy
 
     if not DATASET_PATH.exists():
         logger.error("Dataset no encontrado: %s. Ejecuta el ETL primero.", DATASET_PATH)

@@ -112,6 +112,9 @@ DISCLAIMER = (
 # Logger
 # ---------------------------------------------------------------------------
 
+# Crea y configura el logger del modulo con formato de hora, nivel y mensaje.
+# Salida: objeto Logger listo para uso en todas las funciones del pipeline.
+# Garantiza que no se duplican handlers si el modulo se importa multiples veces.
 def _setup_logger() -> logging.Logger:
     logger = logging.getLogger("synthetic_data")
     logger.setLevel(logging.INFO)
@@ -128,6 +131,9 @@ def _setup_logger() -> logging.Logger:
 # Utilidades comunes
 # ---------------------------------------------------------------------------
 
+# Establece los parametros globales de Matplotlib segun la guia de estilo del proyecto.
+# Fuente Arial, sin bordes superior y derecho, cuadricula gris suave y tamanos de texto
+# coherentes con los entregables del TFG. Sin entrada ni salida de datos.
 def _setup_rcparams() -> None:
     plt.rcParams.update({
         "font.family":       "sans-serif",
@@ -145,11 +151,19 @@ def _setup_rcparams() -> None:
     })
 
 
+# Guarda la figura en disco con resolucion de 300 DPI apta para documentos academicos
+# y libera la memoria de Matplotlib cerrando la figura tras el guardado.
+# Entrada: figura, ruta de destino y DPI opcional. Sin retorno.
 def _save_fig(fig: plt.Figure, path: Path, dpi: int = 300) -> None:
     fig.savefig(path, dpi=dpi, bbox_inches="tight", facecolor="white")
     plt.close(fig)
 
 
+# Convierte vectores separados de evento y tiempo al formato de array estructurado
+# que exige scikit-survival: dtype=[("event", bool), ("time", float)].
+# Entrada: arrays de indicador de evento (DTH o PFSCD) y tiempo (DTHDY o PFSDY).
+# Salida: array estructurado compatible con CoxPHSurvivalAnalysis y concordance_index_censored.
+# Nota oncologica: el indicador de evento sigue la convencion 1=muerte/progresion, 0=censura.
 def _make_y(event: np.ndarray, time: np.ndarray) -> np.ndarray:
     return np.array(
         [(bool(e), float(t)) for e, t in zip(event, time)],
@@ -157,6 +171,11 @@ def _make_y(event: np.ndarray, time: np.ndarray) -> np.ndarray:
     )
 
 
+# Instancia el preprocesador (imputacion, estandarizacion, one-hot) y lo ajusta
+# exclusivamente sobre las columnas FEATURES del dataframe recibido.
+# Principio anti-leakage: el ajuste nunca toca datos de test ni datos reales cuando
+# se invoca en el contexto TSTR (donde df es el dataset sintetico).
+# Entrada: dataframe con las columnas de FEATURES. Salida: (X_procesado, preprocesador_ajustado).
 def _fit_preprocessor(df: pd.DataFrame):
     """Ajusta el preprocesador solo sobre df[FEATURES] y lo devuelve junto con X procesado."""
     preproc = build_preprocessor()
@@ -164,6 +183,10 @@ def _fit_preprocessor(df: pd.DataFrame):
     return X, preproc
 
 
+# Fija la semilla de aleatoriedad en NumPy, random de Python y PyTorch (si esta instalado).
+# Reproducibilidad: garantiza que CTGAN y los shadow models producen los mismos resultados
+# entre ejecuciones, condicion necesaria para el KPI-1 (entorno limpio reproducible).
+# Entrada: entero de semilla. Sin retorno.
 def _set_global_seeds(seed: int) -> None:
     np.random.seed(seed)
     try:
@@ -182,25 +205,51 @@ def _set_global_seeds(seed: int) -> None:
 # Generacion con CTGAN (SDV >= 1.0)
 # ---------------------------------------------------------------------------
 
+# Construye el objeto SingleTableMetadata de SDV para el dataframe dado.
+# SDV infiere automaticamente los tipos de columna; esta funcion corrige las columnas
+# binarias y categoricas que el detector automatico podria tratar como numericas continuas.
+# Nota de implementacion SDV: declarar sdtype="categorical" en columnas binarias (DTH, PFSCD,
+# TXG, EVALPRIM, EVALQOL) y ordinales (SEXCD, B_ECOGN) permite a CTGAN aprender correctamente
+# sus distribuciones discretas en lugar de modelarlas como Gaussianas.
+# Entrada: dataframe completo. Salida: objeto SingleTableMetadata configurado.
 def _build_sdv_metadata(df: pd.DataFrame):
     from sdv.metadata import SingleTableMetadata
     meta = SingleTableMetadata()
     meta.detect_from_dataframe(df)
+    # Forzar tipo categorico en variables binarias y ordinales para evitar sintesis incorrecta
     for col in ["DTH", "PFSCD", "TXG", "EVALPRIM", "EVALQOL", "SEXCD", "B_ECOGN"]:
         if col in df.columns:
             meta.update_column(col, sdtype="categorical")
     return meta
 
 
+# Instancia y entrena un CTGANSynthesizer (SDV >= 1.0) sobre el dataframe recibido.
+# CTGAN es un GAN condicional para datos tabulares que aprende la distribucion conjunta
+# de covariables mixtas (numericas y categoricas).
+# El parametro epochs controla el numero de epocas de entrenamiento del generador y el
+# discriminador. Para el sintetizador principal se usan MAIN_EPOCHS=300; para los shadow
+# models del ataque de membership inference se usan SHADOW_EPOCHS=100 (balance velocidad/calidad).
+# seed_offset permite aislar la semilla de cada shadow model del resto del pipeline.
+# Entrada: dataframe de entrenamiento, numero de epocas y desplazamiento de semilla.
+# Salida: sintetizador ajustado listo para llamar a .sample().
 def _train_ctgan(df: pd.DataFrame, epochs: int, seed_offset: int = 0):
     from sdv.single_table import CTGANSynthesizer
-    _set_global_seeds(SEED + seed_offset)
+    _set_global_seeds(SEED + seed_offset)  # semilla diferenciada por shadow model
     meta = _build_sdv_metadata(df)
-    synth = CTGANSynthesizer(meta, epochs=epochs, verbose=False)
+    synth = CTGANSynthesizer(meta, epochs=epochs, verbose=False)  # epocas fijadas a priori
     synth.fit(df)
     return synth
 
 
+# Corrige tipos y recorta rangos del dataset sintetico al espacio plausible del dataset real.
+# CTGAN puede generar valores fuera del dominio clinico valido (p.ej., tiempos negativos,
+# indicadores de evento fuera de {0,1} o niveles de ECOG no definidos). Esta funcion aplica:
+# - Clipping de binarias a {0,1} y de tiempos a valores positivos.
+# - Restriccion de MEDHX_N al rango entero [0,6] tal como define el ETL.
+# - Clipping de AGE al rango observado en los datos reales.
+# - Proyeccion de SEXCD y B_ECOGN a los valores validos del dataset real, usando la moda
+#   como valor de reemplazo cuando se genera un nivel inexistente.
+# Entrada: dataset sintetico crudo y dataset real de referencia. Salida: dataset corregido.
 def _postprocess(df_syn: pd.DataFrame, df_real: pd.DataFrame) -> pd.DataFrame:
     """Corrige tipos y recorta rangos del dataset sintetico al rango plausible del real."""
     df = df_syn.copy()
@@ -239,6 +288,15 @@ def _postprocess(df_syn: pd.DataFrame, df_real: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+# Orquesta el entrenamiento del sintetizador CTGAN principal y la generacion de N_SYNTHETIC
+# registros sinteticos a partir del dataset real de n=479 sujetos.
+# Flujo: seleccion de columnas relevantes (ALL_COLS), entrenamiento con MAIN_EPOCHS=300,
+# muestreo y postprocesado para garantizar coherencia de dominio clinico.
+# Las filas con NaN en covariables predictoras se eliminan con aviso al logger.
+# N_SYNTHETIC = 479 (igual al real) para que las comparaciones de distribucion sean directas.
+# Nota de privacidad: los datos sinteticos se destinan UNICAMENTE a prototipado metodologico;
+# no representan pacientes reales ni deben usarse con fines clinicos.
+# Entrada: dataset real y logger. Salida: dataframe sintetico postprocesado.
 def generate_synthetic(df_real: pd.DataFrame, logger: logging.Logger) -> pd.DataFrame:
     """Entrena el sintetizador CTGAN sobre el dataset real y genera N_SYNTHETIC registros."""
     cols   = [c for c in ALL_COLS if c in df_real.columns]
@@ -264,6 +322,17 @@ def generate_synthetic(df_real: pd.DataFrame, logger: logging.Logger) -> pd.Data
 # TSTR: Train on Synthetic, Test on Real
 # ---------------------------------------------------------------------------
 
+# Evalua la utilidad del dataset sintetico mediante la metodologia TSTR
+# (Train on Synthetic, Test on Real) con validacion cruzada estratificada k=5 sobre OS.
+# Protocolo TSTR puro:
+#   1. El preprocesador se ajusta UNICAMENTE sobre los datos sinteticos (sin ver el real),
+#      garantizando que no hay fuga de informacion del real al sintetico.
+#   2. Cox PH se ajusta sobre todos los datos sinteticos transformados.
+#   3. El C-index se calcula en cada fold de test del dataset real, aplicando el preprocesador
+#      ya ajustado sobre sinteticos mediante .transform() (nunca .fit_transform()).
+# La comparacion TSTR vs TRTR cuantifica cuanta utilidad predictiva conservan los sinteticos
+# respecto al modelo entrenado en datos reales (referencia: C-index TRTR = 0.600 +/- 0.042).
+# Entrada: dataset real, dataset sintetico y logger. Salida: diccionario con metricas de utilidad.
 def evaluate_tstr(
     df_real: pd.DataFrame,
     df_syn: pd.DataFrame,
@@ -278,23 +347,23 @@ def evaluate_tstr(
     """
     logger.info("Evaluando TSTR (Cox PH, OS)...")
 
-    # Preprocesado ajustado sobre sinteticos
+    # Preprocesado ajustado sobre sinteticos: principio TSTR puro, sin ver datos reales
     n_events_syn = int(pd.to_numeric(df_syn.get("DTH", pd.Series(dtype=float)),
                                      errors="coerce").fillna(0).sum())
     if n_events_syn < 10:
         logger.error("Insuficientes eventos en sinteticos (%d); TSTR no ejecutado.", n_events_syn)
         return {}
 
-    X_syn_proc, preproc_syn = _fit_preprocessor(df_syn)
+    X_syn_proc, preproc_syn = _fit_preprocessor(df_syn)  # preprocesador ajustado solo sobre sinteticos
     y_syn = _make_y(df_syn["DTH"].values, df_syn["DTHDY"].values)
 
     cox_tstr = CoxPHSurvivalAnalysis(alpha=0, ties="efron", n_iter=100)
     cox_tstr.fit(X_syn_proc, y_syn)
 
-    # Evaluacion fold a fold sobre el real
+    # Evaluacion fold a fold sobre el real: el preprocesador ya ajustado se aplica con .transform()
     y_real  = _make_y(df_real["DTH"].values, df_real["DTHDY"].values)
     X_real  = df_real[FEATURES].copy()
-    strata  = df_real["DTH"].astype(int).values * 2 + df_real["TXG"].astype(int).values
+    strata  = df_real["DTH"].astype(int).values * 2 + df_real["TXG"].astype(int).values  # estratificacion por evento y brazo
 
     cv = StratifiedKFold(n_splits=K_FOLDS, shuffle=True, random_state=SEED)
     tstr_folds = []
@@ -310,7 +379,7 @@ def evaluate_tstr(
         tstr_folds.append({"fold": fold_i + 1, "tstr_cindex": float(c)})
         logger.info("  Fold %d: TSTR C-index = %.4f", fold_i + 1, c)
 
-    # Cargar TRTR por fold si el CSV esta disponible
+    # Cargar TRTR por fold desde el CSV de detalle del CV real, si esta disponible
     trtr_by_fold: dict[int, float] = {}
     if CV_DETAIL_PATH.exists():
         try:
@@ -352,6 +421,22 @@ def evaluate_tstr(
 # Membership Inference (Shadow Models)
 # ---------------------------------------------------------------------------
 
+# Evalua el riesgo de membership inference mediante N_SHADOW shadow models de CTGAN.
+# El ataque de membership inference trata de determinar si un registro concreto formaba
+# parte del conjunto de entrenamiento del generador. Este es uno de los ataques de privacidad
+# mas relevantes en sintetizadores de datos clinicos (Shokri et al., 2017).
+# Protocolo de shadow models:
+#   - Cada shadow se entrena sobre SHADOW_TRAIN_FRAC (70%) del dataset real (subconjunto aleatorio).
+#   - El registro pertenece a la clase "miembro" si fue incluido en ese subconjunto de entrenamiento.
+#   - Score de ataque: negativo de la distancia minima del registro real al dataset sintetico
+#     del shadow (menor distancia => mayor probabilidad de haber sido "miembro").
+#   - Se acumulan pares (score, etiqueta) de todos los shadows y se calcula AUC y TPR@FPR=0.1.
+# Criterios a priori fijados: AUC <= 0.60, TPR@FPR=0.1 <= 0.20.
+# Un AUC cercano a 0.5 indica que el sintetizador no memoriza registros individuales.
+# Nota oncologica: cuasi-identificadores como edad, sexo y ECOG aumentan el riesgo de
+# reidentificacion de pacientes oncologicos en datasets de ensayos clinicos pequenos (n=479).
+# Entrada: dataset real y logger. Salida: diccionario con AUC, TPR@FPR=0.1 y curva ROC,
+# o None si todos los shadow models fallaron.
 def membership_inference_shadow(
     df_real: pd.DataFrame,
     logger: logging.Logger,
@@ -376,7 +461,7 @@ def membership_inference_shadow(
     cols = [c for c in ALL_COLS if c in df_real.columns]
     n    = len(df_real)
 
-    # Preprocesador de referencia ajustado sobre TODOS los reales (espacio comun de distancias)
+    # Preprocesador de referencia ajustado sobre TODOS los reales para definir espacio comun de distancias
     X_real_all, preproc_ref = _fit_preprocessor(df_real)
 
     all_scores: list[float] = []
@@ -409,13 +494,13 @@ def membership_inference_shadow(
             logger.warning("  Shadow %d: datos sinteticos insuficientes; saltando.", si + 1)
             continue
 
-        # Transformar sinteticos en el espacio de referencia (ajustado sobre reales)
+        # Transformar sinteticos al espacio comun con .transform() para que las distancias sean comparables
         try:
             X_syn_s = preproc_ref.transform(df_syn_s[FEATURES].copy())
         except Exception:
             continue
 
-        # Distancia minima de cada real al sintetico del shadow
+        # Calcular distancia minima de cada registro real al sintetico del shadow (score de ataque)
         dist_mat = cdist(X_real_all, X_syn_s, metric="euclidean")  # (n_real, n_syn)
         min_dists = dist_mat.min(axis=1)
 
@@ -434,8 +519,9 @@ def membership_inference_shadow(
     fpr_arr, tpr_arr, _ = roc_curve(labels_arr, scores_arr)
     tpr_at_fpr01 = float(np.interp(0.10, fpr_arr, tpr_arr))
 
-    accepted_auc = auc         <= ACCEPT["mi_auc_max"]
-    accepted_tpr = tpr_at_fpr01 <= ACCEPT["mi_tpr_fpr01_max"]
+    # Comparar AUC y TPR@FPR=0.1 contra umbrales fijados a priori en ACCEPT
+    accepted_auc = auc         <= ACCEPT["mi_auc_max"]      # umbral: AUC <= 0.60
+    accepted_tpr = tpr_at_fpr01 <= ACCEPT["mi_tpr_fpr01_max"]  # umbral: TPR@FPR=0.1 <= 0.20
 
     logger.info(
         "  AUC = %.4f (%s)  TPR@FPR=0.1 = %.4f (%s)",
@@ -459,6 +545,16 @@ def membership_inference_shadow(
 # K-anonimidad (quasi-identifier uniqueness)
 # ---------------------------------------------------------------------------
 
+# Mide el riesgo de reidentificacion mediante k-anonimidad sobre cuasi-identificadores.
+# La k-anonimidad cuantifica cuantos registros del dataset real comparten los mismos valores
+# de cuasi-identificadores que un registro sintetico dado. Un registro sintetico con k=1
+# es "unico" y podria usarse como pivote para reidentificar al sujeto real correspondiente.
+# Cuasi-identificadores seleccionados: AGE (en intervalos de AGE_BIN_STEP=5 anos), SEXCD y B_ECOGN.
+# Estos tres campos son los cuasi-identificadores mas relevantes en oncologia clinica porque
+# combinados con el diagnostico pueden identificar a pacientes en ensayos pequenos (n=479).
+# Criterios a priori: registros sinteticos unicos (k=1) < 5%, k<=2 < 10%, k<=5 < 20%.
+# Entrada: dataset sintetico, dataset real (como referencia de conteos) y logger.
+# Salida: diccionario con fracciones por nivel k y flags de aceptacion.
 def compute_k_anonymity(
     df_syn: pd.DataFrame,
     df_real: pd.DataFrame,
@@ -473,9 +569,16 @@ def compute_k_anonymity(
     """
     logger.info("K-anonimidad sobre cuasi-identificadores...")
 
+    # Discretizar AGE en bins de 5 anos para definir el cuasi-identificador de edad
+    # Funcion auxiliar: convierte una edad continua al limite inferior del intervalo de 5 anos.
+    # El binning reduce la granularidad de la edad, aproximando el concepto de k-anonimidad
+    # segun el estandar de anonimizacion de la AEPD para datos clinicos.
     def _age_bin(age: float) -> int:
-        return int(float(age) // AGE_BIN_STEP) * AGE_BIN_STEP
+        return int(float(age) // AGE_BIN_STEP) * AGE_BIN_STEP  # binning de edad: paso=5 anos
 
+    # Funcion auxiliar: construye la clave de cuasi-identificador de una fila como tupla.
+    # Combina edad bineada, sexo y ECOG basal: los tres cuasi-identificadores principales
+    # de este dataset de ensayo clinico oncologico.
     def _qi_key(row) -> tuple:
         return (_age_bin(row["AGE"]), str(row["SEXCD"]), str(row["B_ECOGN"]))
 
@@ -499,9 +602,10 @@ def compute_k_anonymity(
     k5_pct = float((k_arr <= 5).sum() / n_syn)
     k0_pct = float((k_arr == 0).sum() / n_syn)
 
-    a_k1 = k1_pct <= ACCEPT["kanon_k1_max"]
-    a_k2 = k2_pct <= ACCEPT["kanon_k2_max"]
-    a_k5 = k5_pct <= ACCEPT["kanon_k5_max"]
+    # Comparar fracciones contra umbrales fijados a priori en ACCEPT
+    a_k1 = k1_pct <= ACCEPT["kanon_k1_max"]  # umbral: k=1 <= 5%
+    a_k2 = k2_pct <= ACCEPT["kanon_k2_max"]  # umbral: k<=2 <= 10%
+    a_k5 = k5_pct <= ACCEPT["kanon_k5_max"]  # umbral: k<=5 <= 20%
 
     logger.info(
         "  k=1: %.1f%% (%s)  k<=2: %.1f%% (%s)  k<=5: %.1f%% (%s)",
@@ -524,6 +628,18 @@ def compute_k_anonymity(
 # Distance to Closest Record (DCR)
 # ---------------------------------------------------------------------------
 
+# Calcula la Distance to Closest Record (DCR) y la Real-to-Real Distance Reference (RRDR)
+# en el espacio de covariables preprocesadas para cuantificar el riesgo de reidentificacion
+# mediante proximidad geometrica.
+# DCR: para cada registro sintetico, distancia Euclidea minima al registro real mas cercano.
+#   Un DCR bajo indica que el sintetico es casi identico a algun real, aumentando el riesgo
+#   de que revele informacion de ese sujeto especifico.
+# RRDR: para cada registro real, distancia al vecino real mas cercano (leave-one-out).
+#   Sirve como referencia del "ruido natural" del dataset: si DCR >= RRDR, los sinteticos
+#   no estan mas cerca de los reales de lo que los reales lo estan entre si.
+# Criterio a priori: DCR_p5 / RRDR_mediana >= 0.50.
+# Entrada: matrices X_syn y X_real ya preprocesadas (mismo espacio de covariables) y logger.
+# Salida: diccionario con percentiles de DCR y RRDR, ratio y flag de aceptacion.
 def compute_dcr(
     X_syn: np.ndarray,
     X_real: np.ndarray,
@@ -538,11 +654,11 @@ def compute_dcr(
     """
     logger.info("Computando DCR y RRDR...")
 
-    # DCR: sintetico vs real
+    # DCR: matriz de distancias sintetico vs real; min por fila = distancia al vecino mas cercano
     dist_sr  = cdist(X_syn, X_real, metric="euclidean")   # (n_syn, n_real)
     dcr      = dist_sr.min(axis=1)
 
-    # RRDR: real vs real (LOO)
+    # RRDR: distancias real vs real con diagonal infinita para excluir la distancia consigo mismo (LOO)
     dist_rr  = cdist(X_real, X_real, metric="euclidean")  # (n_real, n_real)
     np.fill_diagonal(dist_rr, np.inf)
     rrdr = dist_rr.min(axis=1)
@@ -552,8 +668,9 @@ def compute_dcr(
     rrdr_p = {f"p{p}": float(np.percentile(rrdr, p)) for p in pcts}
 
     rrdr_med = rrdr_p["p50"]
+    # Calcular ratio DCR_p5 / RRDR_mediana y comparar contra el umbral fijado a priori (>= 0.50)
     ratio    = dcr_p["p5"] / rrdr_med if rrdr_med > 0 else float("nan")
-    accepted = bool(ratio >= ACCEPT["dcr_p5_rrdr_ratio_min"]) if not np.isnan(ratio) else False
+    accepted = bool(ratio >= ACCEPT["dcr_p5_rrdr_ratio_min"]) if not np.isnan(ratio) else False  # umbral: ratio >= 0.50
 
     logger.info(
         "  DCR p5=%.4f  RRDR mediana=%.4f  ratio=%.4f (%s)",
@@ -574,6 +691,12 @@ def compute_dcr(
 # Figuras
 # ---------------------------------------------------------------------------
 
+# Genera el grafico de barras comparativo TRTR vs TSTR con barras de error (desviacion tipica).
+# Visualiza la utilidad del dataset sintetico: si la barra TSTR es cercana a TRTR, los
+# sinteticos son informativos para el modelo de supervivencia. El ratio TSTR/TRTR se muestra
+# como anotacion en el grafico para cuantificar la perdida de utilidad.
+# El pie de advertencia DISCLAIMER recuerda el uso exclusivamente metodologico de los sinteticos.
+# Entrada: diccionario de metricas TSTR, ruta de salida y logger. Sin retorno (guarda PNG).
 def _plot_tstr(tstr: dict, path: Path, logger: logging.Logger) -> None:
     _setup_rcparams()
     fig, ax = plt.subplots(figsize=(7, 4.5))
@@ -619,6 +742,11 @@ def _plot_tstr(tstr: dict, path: Path, logger: logging.Logger) -> None:
     logger.info("Guardado: %s", path.name)
 
 
+# Genera la curva ROC del ataque de membership inference junto con las lineas de referencia:
+# clasificador aleatorio (AUC=0.5), umbral de TPR@FPR=0.1 y punto de operacion del ataque.
+# La etiqueta "ACEPTADO" o "RECHAZADO" se colorea en verde o ambar segun los criterios a priori.
+# Un AUC cercano a 0.5 indica que el sintetizador no memoriza registros individuales del real.
+# Entrada: diccionario de membership inference, ruta de salida y logger. Sin retorno (guarda PNG).
 def _plot_membership(mi: dict, path: Path, logger: logging.Logger) -> None:
     _setup_rcparams()
     fig, ax = plt.subplots(figsize=(6, 5))
@@ -661,6 +789,13 @@ def _plot_membership(mi: dict, path: Path, logger: logging.Logger) -> None:
     logger.info("Guardado: %s", path.name)
 
 
+# Genera histogramas superpuestos de DCR (sintetico vs real) y RRDR (real vs real LOO).
+# Permite comparar visualmente si los sinteticos mantienen una distancia suficiente respecto
+# a los reales (DCR >> 0) o si estan concentrados cerca de registros reales concretos.
+# La linea vertical en DCR_p5 y la anotacion del ratio facilitan la auditoria de privacidad.
+# Un solapamiento significativo entre DCR y RRDR indica que los sinteticos son indistinguibles
+# de los reales en el espacio de covariables, lo que supone un riesgo de reidentificacion.
+# Entrada: diccionario DCR, ruta de salida y logger. Sin retorno (guarda PNG).
 def _plot_dcr(dcr: dict, path: Path, logger: logging.Logger) -> None:
     _setup_rcparams()
     fig, ax = plt.subplots(figsize=(8, 4.5))
@@ -695,6 +830,13 @@ def _plot_dcr(dcr: dict, path: Path, logger: logging.Logger) -> None:
     logger.info("Guardado: %s", path.name)
 
 
+# Genera el grafico de barras de k-anonimidad: porcentaje de registros sinteticos por nivel k.
+# Cada barra incluye una linea roja discontinua que marca el umbral de aceptacion a priori.
+# Los cuasi-identificadores usados son AGE (intervalos de 5 anos), SEXCD y B_ECOGN.
+# La barra "k=0 (sin match)" indica sinteticos sin ningun registro real con los mismos
+# cuasi-identificadores, lo que en principio es favorable para la privacidad pero puede
+# indicar distribucion fuera del dominio clinico observado.
+# Entrada: diccionario de k-anonimidad, ruta de salida y logger. Sin retorno (guarda PNG).
 def _plot_kanon(kanon: dict, path: Path, logger: logging.Logger) -> None:
     _setup_rcparams()
     fig, ax = plt.subplots(figsize=(7, 4.5))
@@ -754,6 +896,17 @@ def _plot_kanon(kanon: dict, path: Path, logger: logging.Logger) -> None:
 # Main
 # ---------------------------------------------------------------------------
 
+# Punto de entrada principal del componente de datos sinteticos.
+# Orquesta el pipeline completo en 7 etapas secuenciales:
+#   1. Generacion de N_SYNTHETIC registros sinteticos con CTGAN.
+#   2. Evaluacion de utilidad TSTR (Train on Synthetic, Test on Real) con Cox PH y CV k=5.
+#   3. Evaluacion del riesgo de membership inference con N_SHADOW shadow models de CTGAN.
+#   4. Computo de k-anonimidad sobre cuasi-identificadores (AGE_bin, SEXCD, B_ECOGN).
+#   5. Computo de DCR y RRDR en el espacio de covariables preprocesadas.
+#   6. Generacion de las cuatro figuras de reporte (TSTR, membership, DCR, k-anonimidad).
+#   7. Serializacion de todas las metricas en synthetic_metrics.json.
+# Retorna 0 si la ejecucion es exitosa, 1 si falta alguna dependencia o el dataset de entrada.
+# Advertencia: los datos sinteticos generados son exclusivamente para prototipado metodologico.
 def main() -> int:
     logger = _setup_logger()
     _set_global_seeds(SEED)

@@ -80,6 +80,9 @@ DISPLAY_NAMES = {
 # Setup
 # ---------------------------------------------------------------------------
 
+# Inicializa el logger del modulo con formato de hora, nivel y mensaje.
+# Entrada: ninguna. Salida: objeto Logger configurado con StreamHandler a stdout.
+# Permite registrar el progreso del analisis de interpretabilidad en consola.
 def setup_logger() -> logging.Logger:
     logger = logging.getLogger("interpretability")
     logger.setLevel(logging.INFO)
@@ -91,6 +94,10 @@ def setup_logger() -> logging.Logger:
     return logger
 
 
+# Establece parametros globales de estilo para matplotlib.
+# Entrada: ninguna. Salida: ninguna (efecto colateral sobre plt.rcParams).
+# Garantiza consistencia visual (fuente Arial, grilla suave, sin espinas superior/derecha)
+# en todos los graficos del modulo.
 def _rc() -> None:
     plt.rcParams.update({
         "font.family":     "sans-serif",
@@ -103,6 +110,9 @@ def _rc() -> None:
     })
 
 
+# Guarda una figura matplotlib en disco y cierra el objeto para liberar memoria.
+# Entrada: figura (Figure), ruta de salida (Path o str), resolucion en ppp.
+# Salida: ninguna. El cierre evita acumulacion de figuras abiertas en procesos largos.
 def _save(fig, path, dpi=300):
     fig.savefig(path, dpi=dpi, bbox_inches="tight", facecolor="white")
     plt.close(fig)
@@ -112,6 +122,16 @@ def _save(fig, path, dpi=300):
 # Preparacion del dataset para lifelines
 # ---------------------------------------------------------------------------
 
+# Prepara el dataframe de entrada para el ajuste del modelo Cox con lifelines.
+# Entrada: dataframe completo, nombre de la columna de evento y nombre de la columna de tiempo.
+# Salida: subconjunto con covariables en escala original, imputacion por mediana y dummies.
+# Perspectiva de ciencia de datos: se trabaja en escala natural (no estandarizada) para que
+# los coeficientes del Cox sean interpretables directamente como log-HR por unidad de la
+# covariable. La imputacion por mediana de CADIAGM y B_HGB (4 valores faltantes) es
+# conservadora y coherente con el patron MCAR/MAR de baja proporcion de missingness.
+# La codificacion dummy con drop_first=True evita la trampa de la variable indicadora:
+# B_ECOGN_2.0 contrasta ECOG 2 frente a ECOG 1 (referencia), con importancia oncologica
+# clara ya que ECOG 2 implica mayor limitacion funcional y peor pronostico esperado.
 def prepare_lifelines_df(
     df: pd.DataFrame, event_col: str, time_col: str,
 ) -> pd.DataFrame:
@@ -142,10 +162,21 @@ def prepare_lifelines_df(
 # Ajuste Cox con lifelines
 # ---------------------------------------------------------------------------
 
+# Ajusta el modelo Cox proporcional completo sobre todo el dataset con lifelines.
+# Entrada: dataframe preparado (covariables + tiempo + evento), nombres de columnas.
+# Salida: objeto CoxPHFitter ajustado con coeficientes, IC95% y p-valores.
+# Perspectiva de ciencia de datos: el ajuste sobre el conjunto completo (sin particion)
+# sirve exclusivamente para la interpretabilidad descriptiva (HR e IC95%): las metricas
+# predictivas (C-index, IBS) se calculan mediante validacion cruzada OOF en otros modulos.
+# El penalizador se fija a 0.0 para obtener estimaciones MLE sin contraccion, adecuadas
+# para la lectura de asociaciones. Las asociaciones obtenidas son descriptivas, no causales:
+# el diseno observacional y el ajuste incompleto de confusores impiden inferencia causal.
+# Nota oncologica: en cohortes de quimioterapia con n = 479, la ausencia de penalizador
+# es razonable dada la dimension reducida (7 covariables) y la proporcion de eventos.
 def fit_lifelines_cox(
     df_lf: pd.DataFrame, event_col: str, time_col: str,
 ) -> CoxPHFitter:
-    cph = CoxPHFitter(penalizer=0.0)
+    cph = CoxPHFitter(penalizer=0.0)  # Sin regularizacion: estimacion MLE pura para interpretabilidad
     cph.fit(df_lf, duration_col=time_col, event_col=event_col, show_progress=False)
     return cph
 
@@ -154,10 +185,20 @@ def fit_lifelines_cox(
 # Tabla de HRs
 # ---------------------------------------------------------------------------
 
+# Construye la tabla de Hazard Ratios con IC95% y p-valores a partir del resumen de lifelines.
+# Entrada: objeto CoxPHFitter ajustado, nombre del endpoint.
+# Salida: DataFrame con columnas log_HR, HR, IC95% inferior y superior, p-valor y significacion.
+# Perspectiva de ciencia de datos: exp(coef) es el HR, que cuantifica la asociacion descriptiva
+# (no causal) entre cada covariable y el riesgo instantaneo de evento. Un HR > 1 indica mayor
+# tasa de riesgo; HR < 1 indica efecto protector en sentido descriptivo. Los IC95% se obtienen
+# directamente de la aproximacion asintotica de Wald del Cox: covariables con IC que no cruzan 1
+# se consideran estadisticamente significativas. La columna 'sig' facilita la lectura en tablas
+# de la memoria. Nota oncologica: en esta cohorte, MEDHX_N (numero de sistemas con comorbilidad)
+# captura carga de enfermedad previa y puede asociarse a mayor riesgo basal de mortalidad.
 def build_hr_table(cph: CoxPHFitter, ep_name: str) -> pd.DataFrame:
     s = cph.summary.copy()
     s = s[["coef", "exp(coef)", "exp(coef) lower 95%", "exp(coef) upper 95%", "p"]].copy()
-    s.columns = ["log_HR", "HR", "HR_CI_lo", "HR_CI_hi", "p_valor"]
+    s.columns = ["log_HR", "HR", "HR_CI_lo", "HR_CI_hi", "p_valor"]  # Renombrado para claridad: exp(coef) = HR
     s["endpoint"]     = ep_name
     s["variable"]     = s.index
     s["display_name"] = s["variable"].map(lambda v: DISPLAY_NAMES.get(v, v))
@@ -173,6 +214,17 @@ def build_hr_table(cph: CoxPHFitter, ep_name: str) -> pd.DataFrame:
 # Forest plot de HRs
 # ---------------------------------------------------------------------------
 
+# Genera el forest plot de Hazard Ratios para todos los endpoints en un unico grafico.
+# Entrada: diccionario {nombre_endpoint: DataFrame de HR} con OS y PFS.
+# Salida: objeto Figure de matplotlib con un panel unico y dos series de puntos/IC.
+# Perspectiva de ciencia de datos: el forest plot en escala logaritmica es el estandar
+# para comunicar HR con IC95% en analisis de supervivencia multivariante. La escala log
+# simetriza la representacion de efectos protectores (HR < 1) y de riesgo (HR > 1) respecto
+# a la linea de referencia HR = 1 (ausencia de asociacion). El desplazamiento vertical (offset)
+# entre OS y PFS permite comparar ambos endpoints sin solapamiento de puntos. Las estrellas
+# de significacion marcan las asociaciones mas robustas. La lectura es descriptiva, no causal.
+# Nota oncologica: la comparacion visual entre OS y PFS permite detectar si una covariable
+# como B_ECOGN o MEDHX_N tiene efecto diferencial sobre mortalidad frente a progresion.
 def plot_forest_hr(
     hr_tables: dict[str, pd.DataFrame],
 ) -> plt.Figure:
@@ -199,7 +251,7 @@ def plot_forest_hr(
             hr, lo, hi = row["HR"], row["HR_CI_lo"], row["HR_CI_hi"]
             if np.isnan(hr):
                 continue
-            # Clip extremos para visualizacion
+            # Clip extremos para visualizacion: IC muy amplios se truncan para mantener escala legible
             lo_plot = max(lo, 0.05)
             hi_plot = min(hi, 20.0)
             ax.plot([lo_plot, hi_plot], [y_pos[i] + off] * 2,
@@ -229,12 +281,22 @@ def plot_forest_hr(
 # Test de Schoenfeld y residuos
 # ---------------------------------------------------------------------------
 
+# Ejecuta el test de proporcionalidad de riesgos de Schoenfeld variable a variable.
+# Entrada: CoxPHFitter ajustado, dataframe lifelines, nombre del endpoint.
+# Salida: DataFrame con estadistico rho, p-valor y flag de cumplimiento por covariable.
+# Perspectiva de ciencia de datos: el test de Schoenfeld contrasta la hipotesis nula de
+# proporcionalidad (HR constante en el tiempo). La transformacion "rank" del tiempo es
+# la opcion mas robusta ante distribucion temporal asimetrica. Un p < 0.05 indica que el HR
+# de esa covariable varia a lo largo del seguimiento, lo que invalida la interpretacion
+# de un unico HR constante y puede requerir estratificacion o inclusion de interaccion
+# tiempo-covariable. El flag 'supuesto_ok' (p > 0.05) facilita la clasificacion automatica
+# de covariables que cumplen o violan el supuesto PH en la tabla de la memoria.
 def run_schoenfeld_test(
     cph: CoxPHFitter, df_lf: pd.DataFrame, ep_name: str,
 ) -> pd.DataFrame:
     """Ejecuta el test de proporcionalidad y devuelve una tabla de resultados."""
     try:
-        result = proportional_hazard_test(cph, df_lf, time_transform="rank")
+        result = proportional_hazard_test(cph, df_lf, time_transform="rank")  # Transformacion rank: robusta ante asimetria temporal
         tbl = result.summary.copy()
         tbl["endpoint"] = ep_name
         tbl["variable"] = tbl.index
@@ -247,6 +309,17 @@ def run_schoenfeld_test(
         return pd.DataFrame({"error": [str(exc)]})
 
 
+# Genera el grafico de residuos de Schoenfeld escalados frente al tiempo para cada covariable.
+# Entrada: CoxPHFitter ajustado, dataframe lifelines, nombre e identificador del endpoint.
+# Salida: objeto Figure con un panel por covariable (dispuesto en rejilla de hasta 3 columnas).
+# Perspectiva de ciencia de datos: los residuos de Schoenfeld escalados deben distribuirse
+# aleatoriamente alrededor de cero a lo largo del tiempo si el supuesto PH se cumple. Una
+# tendencia sistematica (curva suavizada con pendiente no nula) evidencia variacion del HR
+# en el tiempo. La media movil (ventana = 10% de los eventos) suaviza el ruido puntual sin
+# introducir sesgo de frontera excesivo, facilitando la inspeccion visual del patron temporal.
+# Esta inspeccion complementa el test formal de Schoenfeld y es especialmente util para
+# detectar efectos que se diluyen a largo plazo, comunes en ensayos de soporte oncologico
+# donde el beneficio del NESP sobre hemoglobina puede atenuarse conforme avanza la enfermedad.
 def plot_schoenfeld(
     cph: CoxPHFitter,
     df_lf: pd.DataFrame,
@@ -292,7 +365,7 @@ def plot_schoenfeld(
 
         ax.scatter(event_times, res, color=C_LIGHT, s=18, alpha=0.6, zorder=2)
 
-        # Suavizado: media movil de ventana = 10% de los datos
+        # Suavizado con media movil: ventana adaptativa al 10% de eventos, minimo 5 puntos
         w = max(5, len(res) // 10)
         smoothed = pd.Series(res).rolling(w, center=True, min_periods=1).mean().values
         ax.plot(event_times, smoothed, color=C_DARK, lw=2, zorder=3,
@@ -316,9 +389,18 @@ def plot_schoenfeld(
 # Main
 # ---------------------------------------------------------------------------
 
+# Orquesta el pipeline completo de interpretabilidad del modelo Cox PH.
+# Entrada: dataset CSV en output/. Salida: tablas CSV y figuras PNG en output/.
+# Perspectiva de ciencia de datos: ejecuta en orden la preparacion, ajuste, extraccion
+# de HR con IC95%, test de Schoenfeld, graficos de residuos y forest plot para OS y PFS.
+# La separacion entre la interpretabilidad (ajuste completo, escala natural) y la evaluacion
+# predictiva (CV-OOF, escala estandarizada) es deliberada: evita confundir la lectura
+# descriptiva de asociaciones con la capacidad discriminativa del modelo.
+# La semilla SEED = 42 se fija aqui aunque la funcion no tenga componente estocastico,
+# por coherencia con el resto del pipeline y reproducibilidad de entorno numpy.
 def main() -> int:
     logger = setup_logger()
-    np.random.seed(SEED)
+    np.random.seed(SEED)  # Fijacion de semilla para reproducibilidad del entorno numpy
 
     if not DATASET_PATH.exists():
         logger.error("Dataset no encontrado: %s", DATASET_PATH)

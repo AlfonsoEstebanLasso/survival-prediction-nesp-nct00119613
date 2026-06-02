@@ -61,6 +61,15 @@ OUTPUT_DIR     = PROJECT_ROOT / "output"
 # Optuna: objetivo con warm-start incremental
 # ---------------------------------------------------------------------------
 
+# _make_rsf_objective: genera la funcion objetivo de Optuna para ajustar el RSF.
+# Recibe las particiones interna de entrenamiento y validacion (matrices numpy)
+# ya preprocesadas. Devuelve una funcion 'objective' que Optuna invoca en cada trial.
+# Justificacion: el RSF es un modelo no lineal basado en bosques de supervivencia;
+# la busqueda de hiperparametros se realiza DENTRO del fold de entrenamiento
+# (nunca expone el conjunto de test externo) para respetar el control anti-fuga.
+# El warm-start incremental (50 -> 200 arboles) permite al MedianPruner descartar
+# configuraciones poco prometedoras antes de completar el entrenamiento completo,
+# reduciendo el coste computacional sin sesgar la busqueda.
 def _make_rsf_objective(X_inner: np.ndarray, X_val: np.ndarray,
                          y_inner: np.ndarray, y_val: np.ndarray):
     def objective(trial: optuna.Trial) -> float:
@@ -89,6 +98,15 @@ def _make_rsf_objective(X_inner: np.ndarray, X_val: np.ndarray,
     return objective
 
 
+# optimize_rsf: ejecuta el estudio Optuna con muestreador TPE para el RSF.
+# Entradas: conjuntos de entrenamiento e interno de validacion (numpy arrays),
+# y la semilla especifica del fold para garantizar reproducibilidad entre ejecuciones.
+# Salida: diccionario con los mejores hiperparametros encontrados en los 30 trials.
+# Justificacion: el muestreador TPE (Tree-structured Parzen Estimator) aproxima
+# la distribucion de hiperparametros que maximizan el C-index, siendo mas eficiente
+# que la busqueda en rejilla en espacios de alta dimension. La semilla por fold
+# (SEED + fold_i) preserva la reproducibilidad sin repetir la misma secuencia de
+# trials en cada fold de la validacion cruzada.
 def optimize_rsf(X_tr: np.ndarray, y_tr: np.ndarray,
                  X_val: np.ndarray, y_val: np.ndarray,
                  fold_seed: int) -> dict:
@@ -109,6 +127,20 @@ def optimize_rsf(X_tr: np.ndarray, y_tr: np.ndarray,
 # Un fold
 # ---------------------------------------------------------------------------
 
+# run_fold: ejecuta el ciclo completo de un fold de la validacion cruzada para el RSF.
+# Entradas: DataFrames de train y test del fold, arrays estructurados de supervivencia
+# (evento + tiempo), rejilla global de tiempos, indice del fold y logger.
+# Salida: diccionario con C-index, IBS, scores de riesgo, matriz de supervivencia OOF
+# y tiempo maximo observado en entrenamiento.
+# Justificacion: el preprocesado (imputacion, escalado, codificacion) se ajusta
+# exclusivamente sobre X_tr para evitar fuga de informacion hacia el fold de test.
+# La busqueda de hiperparametros se delega en un split estratificado interno del 20%,
+# de modo que el conjunto de test externo permanece virgen durante toda la optimizacion.
+# El modelo final usa 300 arboles (N_TREES_FINAL), valor que equilibra varianza y coste
+# computacional para n moderado (n=479 sujetos en esta cohorte).
+# Nota oncologica: el target estructurado (evento OS/PFS + tiempo DTHDY/PFSDY) incluye
+# la censura, lo que permite al RSF aprovechar la informacion parcial de los sujetos
+# vivos al cierre del seguimiento.
 def run_fold(X_tr: pd.DataFrame, X_te: pd.DataFrame,
              y_tr: np.ndarray, y_te: np.ndarray,
              global_times: np.ndarray, fold_i: int,
@@ -132,7 +164,7 @@ def run_fold(X_tr: pd.DataFrame, X_te: pd.DataFrame,
     )
     logger.info("    Fold %d best_params: %s", fold_i + 1, best_params)
 
-    # Modelo final: 300 arboles, ajustado en el fold completo.
+    # Modelo final: 300 arboles (N_TREES_FINAL), fijando la semilla global para reproducibilidad.
     rsf = RandomSurvivalForest(
         n_estimators=N_TREES_FINAL, random_state=SEED, n_jobs=-1, **best_params
     )
@@ -160,6 +192,18 @@ def run_fold(X_tr: pd.DataFrame, X_te: pd.DataFrame,
 # Por endpoint
 # ---------------------------------------------------------------------------
 
+# run_endpoint: orquesta la validacion cruzada estratificada k=5 y el bootstrap
+# para un endpoint concreto (OS o PFS) con el modelo RSF.
+# Entradas: DataFrame completo del dataset, nombre del endpoint, columnas de evento
+# y tiempo, y logger.
+# Salida: diccionario con metricas CV (C-index e IBS por fold, media, std, CV%) y
+# estimaciones bootstrap (media, IC95%) listas para serializar a JSON.
+# Justificacion: la estratificacion de los folds por la variable combinada
+# (evento x brazo TXG) garantiza que la proporcion de eventos y la distribucion
+# del brazo de aleatorizacion sean homogeneas entre folds, lo cual es critico
+# para la validez interna en cohortes pequenas (n=479).
+# Los scores OOF (out-of-fold) se agregan para construir las curvas de supervivencia
+# globales que alimentan el bootstrap, evitando el sesgo de estimacion en muestra.
 def run_endpoint(df: pd.DataFrame, endpoint_name: str,
                  event_col: str, time_col: str,
                  logger: logging.Logger) -> dict:
@@ -184,7 +228,7 @@ def run_endpoint(df: pd.DataFrame, endpoint_name: str,
         )
         fold_metrics.append({"fold": fold_i + 1,
                              "c_index": res["c_index"], "ibs": res["ibs"]})
-        oof_risk[test_idx] = res["risk_scores"]
+        oof_risk[test_idx] = res["risk_scores"]  # agregacion OOF: cada sujeto puntua desde el fold en que fue test
         oof_surv[test_idx] = res["surv_full"]
         t_max_per_fold.append(res["t_max_obs"])
 
@@ -229,6 +273,9 @@ def run_endpoint(df: pd.DataFrame, endpoint_name: str,
 # Main
 # ---------------------------------------------------------------------------
 
+# setup_logger: configura y devuelve un logger con formato de hora, nivel e
+# identificador de modulo. Evita anadir manejadores duplicados si se llama
+# varias veces en la misma sesion de Python.
 def setup_logger(name: str) -> logging.Logger:
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
@@ -240,6 +287,12 @@ def setup_logger(name: str) -> logging.Logger:
     return logger
 
 
+# main: punto de entrada del script RSF. Carga el dataset derivado, ejecuta
+# la validacion cruzada con bootstrap para OS y PFS, y serializa los resultados
+# en output/rsf_metrics.json.
+# Justificacion: centralizar la ejecucion en main() facilita el uso del modulo
+# tanto como script autonomo (python rsf_model.py) como desde un orquestador
+# de pipeline, manteniendo la semilla global (np.random.seed) para reproducibilidad.
 def main() -> int:
     logger = setup_logger("rsf_model")
     np.random.seed(SEED)

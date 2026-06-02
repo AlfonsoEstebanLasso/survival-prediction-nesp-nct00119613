@@ -53,6 +53,13 @@ NUMERIC_FEATURES: list[str] = ["AGE", "B_WEIGHT", "CADIAGM", "B_HGB", "MEDHX_N"]
 CATEGORICAL_FEATURES: list[str] = ["SEXCD", "B_ECOGN"]
 
 
+# Transformador personalizado que selecciona la estrategia de imputacion por columna
+# en funcion de la tasa de faltantes calculada UNICAMENTE sobre el fold de entrenamiento.
+# Hereda de BaseEstimator y TransformerMixin para integrarse en la API de scikit-learn
+# (metodos fit, transform y get_params disponibles sin implementacion adicional).
+# Justificacion: la eleccion adaptativa del imputador optimiza la reconstruccion de la
+# distribucion marginal cuando el patron de datos faltantes es MAR (Missing At Random),
+# hipotesis razonable para variables basales en un ensayo controlado aleatorizado.
 class MissingnessAwareImputer(BaseEstimator, TransformerMixin):
     """
     Imputer que elige la estrategia por columna en el momento del ajuste, usando
@@ -100,6 +107,8 @@ class MissingnessAwareImputer(BaseEstimator, TransformerMixin):
     # Privado
     # ------------------------------------------------------------------
 
+    # Filtra la lista de columnas retornando solo las que existen en el DataFrame.
+    # Evita KeyError cuando el conjunto de predictores difiere del esperado por defecto.
     @staticmethod
     def _present(X: pd.DataFrame, cols: list[str]) -> list[str]:
         return [c for c in cols if c in X.columns]
@@ -108,6 +117,13 @@ class MissingnessAwareImputer(BaseEstimator, TransformerMixin):
     # API sklearn
     # ------------------------------------------------------------------
 
+    # Ajusta el imputer sobre los datos de entrenamiento del fold actual.
+    # Entradas: X (DataFrame con predictores), y ignorado (compatibilidad sklearn).
+    # Salida: self con los atributos de ajuste almacenados (sufijo '_').
+    # Paso metodologico clave: calcula la tasa de missingness por columna y asigna
+    # cada columna numerica al imputador correspondiente segun el umbral configurado.
+    # Todo el ajuste ocurre UNICAMENTE sobre el fold de entrenamiento, garantizando
+    # que el fold de validacion no influye en las estadisticas de imputacion (anti-fuga).
     def fit(self, X: pd.DataFrame, y=None) -> "MissingnessAwareImputer":
         X = pd.DataFrame(X)
         num_cols = self._present(X, self.numeric_features)
@@ -120,6 +136,7 @@ class MissingnessAwareImputer(BaseEstimator, TransformerMixin):
 
         if num_cols:
             miss_rate = X[num_cols].isnull().mean()
+            # Umbral de missingness: <=threshold -> mediana; >threshold -> imputacion iterativa MAR.
             self._num_simple_cols_ = [c for c in num_cols if miss_rate[c] <= self.threshold]
             self._num_iterative_cols_ = [c for c in num_cols if miss_rate[c] > self.threshold]
 
@@ -134,7 +151,7 @@ class MissingnessAwareImputer(BaseEstimator, TransformerMixin):
         # Se ajusta sobre todas las numericas para aprovechar el contexto correlacional.
         if self._num_iterative_cols_:
             self._iterative_: IterativeImputer = IterativeImputer(
-                random_state=self.seed,
+                random_state=self.seed,  # semilla fija para reproducibilidad del algoritmo iterativo
                 max_iter=10,
                 skip_complete=True,
             )
@@ -147,6 +164,12 @@ class MissingnessAwareImputer(BaseEstimator, TransformerMixin):
 
         return self
 
+    # Aplica la imputacion ajustada sobre cualquier conjunto (train o validacion).
+    # Entradas: X (DataFrame, puede contener NaN). Salida: DataFrame sin NaN en las
+    # columnas numericas y categoricas gestionadas.
+    # El orden de aplicacion (mediana -> iterativa -> moda) garantiza que las columnas
+    # con missingness bajo esten completas antes de que el IterativeImputer use el
+    # bloque completo de numericas como contexto.
     def transform(self, X: pd.DataFrame, y=None) -> pd.DataFrame:
         check_is_fitted(self, ["_all_num_cols_", "_cat_cols_"])
         X = pd.DataFrame(X).copy()
@@ -172,6 +195,16 @@ class MissingnessAwareImputer(BaseEstimator, TransformerMixin):
         return X
 
 
+# Fabrica que ensambla el Pipeline completo de preprocesado sin ajustarlo.
+# Entradas: listas opcionales de predictores numericos y categoricos, umbral de
+# missingness y semilla. Salida: Pipeline de scikit-learn listo para recibir
+# fit() dentro del fold de entrenamiento de la CV estratificada k=5.
+# Justificacion: encapsular el Pipeline garantiza que las estadisticas de ajuste
+# (medianas, modas, parametros del IterativeImputer, media/std del StandardScaler,
+# categorias del OneHotEncoder) solo se calculan sobre el fold de entrenamiento,
+# cumpliendo el invariante anti-fuga establecido en el CLAUDE.md del proyecto.
+# El ColumnTransformer divide el flujo en dos ramas: estandarizacion de numericas
+# y codificacion one-hot de categoricas (drop='first' para evitar multicolinealidad).
 def build_preprocessor(
     numeric_features: list[str] | None = None,
     categorical_features: list[str] | None = None,
@@ -213,15 +246,17 @@ def build_preprocessor(
         seed=seed,
     )
 
+    # ColumnTransformer: rama numerica (StandardScaler) y rama categorica (OneHotEncoder).
+    # remainder='drop' descarta cualquier columna no declarada en num_feats ni cat_feats.
     column_transformer = ColumnTransformer(
         transformers=[
-            ("num", StandardScaler(), num_feats),
+            ("num", StandardScaler(), num_feats),  # estandarizacion (media 0, std 1) de las 5 numericas
             (
                 "cat",
                 OneHotEncoder(
-                    drop="first",
+                    drop="first",           # elimina la primera categoria para evitar multicolinealidad
                     handle_unknown="ignore",
-                    sparse_output=False,
+                    sparse_output=False,    # salida densa para compatibilidad con sksurv y numpy
                 ),
                 cat_feats,
             ),

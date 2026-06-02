@@ -75,6 +75,10 @@ OUTPUT_DIR   = PROJECT_ROOT / "output"
 # Utilidades
 # ---------------------------------------------------------------------------
 
+# Configura y devuelve el logger del modulo con formato de hora y nivel.
+# Uso de datos: herramienta de trazabilidad que permite auditar cada etapa
+# del pipeline (carga del dataset, resultados por fold, bootstrap) sin alterar
+# la logica de calculo. No modifica ninguna variable del modelo.
 def setup_logger() -> logging.Logger:
     logger = logging.getLogger("cox_baseline")
     logger.setLevel(logging.INFO)
@@ -87,6 +91,12 @@ def setup_logger() -> logging.Logger:
     return logger
 
 
+# Construye el array estructurado (event: bool, time: float) requerido por
+# scikit-survival a partir de dos arrays numpy de igual longitud.
+# Entrada: event (indicador 0/1) y time (dias hasta el evento o censura).
+# Salida: ndarray con dtype [('event', bool), ('time', float)].
+# Perspectiva de datos de supervivencia: OS usa DTH/DTHDY; PFS usa PFSCD/PFSDY.
+# El indicador de evento sigue la convencion 1 = evento, 0 = censura.
 def make_y(event: np.ndarray, time: np.ndarray) -> np.ndarray:
     """Array estructurado requerido por scikit-survival."""
     return np.array(
@@ -95,6 +105,13 @@ def make_y(event: np.ndarray, time: np.ndarray) -> np.ndarray:
     )
 
 
+# Genera la rejilla de N_TIME_GRID puntos entre los percentiles TIME_Q_LOW
+# y TIME_Q_HIGH de los tiempos de evento observados (y["event"] == True).
+# Entrada: array estructurado y con campos 'event' y 'time'.
+# Salida: ndarray de 25 valores de tiempo para evaluar el IBS.
+# Justificacion: restringir la rejilla al rango interior de eventos evita
+# extrapolar la funcion de supervivencia mas alla de la masa de datos,
+# reduciendo la varianza del estimador IPCW de Kaplan-Meier.
 def event_time_grid(y: np.ndarray) -> np.ndarray:
     """25 puntos entre los percentiles TIME_Q_LOW y TIME_Q_HIGH de los tiempos de evento."""
     event_times = y["time"][y["event"]]
@@ -105,6 +122,18 @@ def event_time_grid(y: np.ndarray) -> np.ndarray:
 # Un fold
 # ---------------------------------------------------------------------------
 
+# Ejecuta un fold completo del esquema de validacion cruzada k=5:
+#   1. Ajusta el preprocesador SOLO sobre X_tr (anti-fuga): imputacion,
+#      escalado y codificacion se aprenden unicamente con datos de entrenamiento.
+#   2. Entrena el modelo Cox proporcional (alpha=0, ties de Efron) sobre y_tr.
+#   3. Calcula C-index en el fold de test como metrica principal de discriminacion.
+#   4. Recorta la rejilla de tiempos al maximo observado en training para
+#      garantizar la validez del IPCW (control anti-fuga temporal).
+#   5. Devuelve risk scores y matriz de supervivencia para el bootstrap OOF.
+# Entrada: subconjuntos de features y outcomes del fold, rejilla global de tiempos.
+# Salida: diccionario con c_index, ibs, risk_scores, surv_mat_full y t_max_obs_train.
+# Nota oncologica: el hazard ratio de Cox cuantifica la diferencia de riesgo
+# relativo entre sujetos en funcion de sus covariables basales.
 def run_fold(
     X_tr: pd.DataFrame,
     X_te: pd.DataFrame,
@@ -119,7 +148,7 @@ def run_fold(
     para garantizar la validez del estimador IPCW de Kaplan-Meier.
     """
     preprocessor = build_preprocessor()
-    X_tr_proc = preprocessor.fit_transform(X_tr)
+    X_tr_proc = preprocessor.fit_transform(X_tr)  # ajuste SOLO en train (anti-fuga)
     X_te_proc = preprocessor.transform(X_te)
 
     cox = CoxPHSurvivalAnalysis(alpha=0, ties="efron", n_iter=100)
@@ -130,7 +159,7 @@ def run_fold(
     # Maximo tiempo observado en training (incluye censurados): cota superior del IPCW KM.
     t_max_obs_train = float(y_tr["time"].max())
     # La rejilla de tiempos debe ser estrictamente menor que t_max_obs_train.
-    fold_times = global_times[global_times < t_max_obs_train]
+    fold_times = global_times[global_times < t_max_obs_train]  # recorte al rango de eventos del fold de entrenamiento
 
     surv_fns = cox.predict_survival_function(X_te_proc)
     surv_mat_full = np.vstack([fn(global_times) for fn in surv_fns])
@@ -156,13 +185,21 @@ def run_fold(
 # Bootstrap
 # ---------------------------------------------------------------------------
 
+# Estima la distribucion del C-index mediante bootstrap no parametrico
+# (n=1000 remuestras con reemplazo) sobre las predicciones OOF agregadas.
+# Entrada: array estructurado y_all con todos los sujetos, vector oof_risk
+#   de riesgos predichos out-of-fold, n remuestras y semilla para reproducibilidad.
+# Salida: ndarray de longitud <= n con los valores de C-index por remuestra.
+# Justificacion: el bootstrap sobre predicciones OOF proporciona un IC95%
+# del C-index sin sesgo de sobreajuste, ya que cada prediccion fue obtenida
+# en el fold de test donde el sujeto no participo en el entrenamiento.
 def bootstrap_cindex(
     y_all: np.ndarray,
     oof_risk: np.ndarray,
     n: int = N_BOOTSTRAP,
     seed: int = SEED,
 ) -> np.ndarray:
-    rng = np.random.default_rng(seed)
+    rng = np.random.default_rng(seed)  # fijacion de semilla para reproducibilidad
     n_samples = len(y_all)
     results = []
     for _ in range(n):
@@ -177,6 +214,14 @@ def bootstrap_cindex(
     return np.array(results)
 
 
+# Estima la distribucion del IBS mediante bootstrap no parametrico (n=1000)
+# sobre la matriz de supervivencia OOF y el array estructurado completo.
+# Entrada: y_all como referencia para el estimador IPCW; oof_surv (n_sujetos x n_tiempos)
+#   con las probabilidades de supervivencia predichas OOF; times, rejilla comun
+#   recortada al minimo t_max entre folds; n remuestras y semilla.
+# Salida: ndarray de longitud <= n con los valores de IBS por remuestra.
+# Justificacion: la rejilla de tiempos comun garantiza que el IPCW sea valido
+# en todos los folds; el bootstrap cuantifica la incertidumbre de calibracion.
 def bootstrap_ibs(
     y_all: np.ndarray,
     oof_surv: np.ndarray,
@@ -185,11 +230,11 @@ def bootstrap_ibs(
     seed: int = SEED,
 ) -> np.ndarray:
     # y_all se usa como referencia IPCW; oof_surv[idx] es el test remuestreado.
-    rng = np.random.default_rng(seed + 1)
+    rng = np.random.default_rng(seed + 1)  # semilla desplazada para independencia del bootstrap de C-index
     n_samples = len(y_all)
     results = []
     for _ in range(n):
-        idx = rng.integers(0, n_samples, size=n_samples)
+        idx = rng.integers(0, n_samples, size=n_samples)  # remuestreo bootstrap con reemplazo
         try:
             ibs = float(integrated_brier_score(y_all, y_all[idx], oof_surv[idx], times))
             results.append(ibs)
@@ -202,6 +247,20 @@ def bootstrap_ibs(
 # Por endpoint
 # ---------------------------------------------------------------------------
 
+# Orquesta la validacion cruzada estratificada k=5 y el bootstrap n=1000
+# para un endpoint concreto (OS o PFS) del modelo Cox proporcional.
+# Entrada: dataset completo df, nombre y columnas del endpoint, logger.
+# Salida: diccionario con metricas CV (C-index e IBS por fold, media, desviacion
+#   y coeficiente de variacion) y bootstrap (media, std, IC95%) por endpoint.
+# Justificacion metodologica:
+#   - La estratificacion combina indicador de evento y brazo TXG (4 clases)
+#     para mantener proporciones de eventos y balance NESP/placebo entre folds.
+#   - El CV% (coeficiente de variacion) es el criterio de estabilidad del
+#     criterio de seleccion a priori: menor CV% = modelo mas robusto.
+#   - La metrica principal de seleccion es C-index; el IBS complementa
+#     la evaluacion de calibracion probabilistica.
+# Nota oncologica: OS y PFS son endpoints primarios en oncologia;
+#   OS = supervivencia global (DTH/DTHDY), PFS = supervivencia libre de progresion (PFSCD/PFSDY).
 def run_endpoint(
     df: pd.DataFrame,
     endpoint_name: str,
@@ -217,7 +276,7 @@ def run_endpoint(
     y = make_y(df[event_col].values, df[time_col].values)
     X = df[FEATURES].copy()
 
-    # Estrato: evento (0/1) x TXG (0/1) => 4 clases para estratificacion del CV.
+    # Estrato: evento (0/1) x TXG (0/1) => 4 clases para estratificacion del CV (StratifiedKFold).
     strata = df[event_col].astype(int).values * 2 + df["TXG"].astype(int).values
 
     global_times = event_time_grid(y)
@@ -226,7 +285,7 @@ def run_endpoint(
         len(global_times), global_times[0], global_times[-1],
     )
 
-    cv = StratifiedKFold(n_splits=K_FOLDS, shuffle=True, random_state=SEED)
+    cv = StratifiedKFold(n_splits=K_FOLDS, shuffle=True, random_state=SEED)  # semilla fija para reproducibilidad del esquema CV
 
     fold_metrics: list[dict] = []
     oof_risk = np.empty(len(df))
@@ -246,8 +305,8 @@ def run_endpoint(
             "c_index": result["c_index"],
             "ibs": result["ibs"],
         })
-        oof_risk[test_idx] = result["risk_scores"]
-        oof_surv[test_idx] = result["surv_mat_full"]
+        oof_risk[test_idx] = result["risk_scores"]  # acumulacion de predicciones OOF para el bootstrap
+        oof_surv[test_idx] = result["surv_mat_full"]  # matriz de supervivencia OOF evaluada en global_times
         t_max_per_fold.append(result["t_max_obs_train"])
 
         logger.info(
@@ -281,6 +340,10 @@ def run_endpoint(
     boot_c = bootstrap_cindex(y, oof_risk, n=N_BOOTSTRAP, seed=SEED)
     boot_i = bootstrap_ibs(y, boot_surv, boot_times, n=N_BOOTSTRAP, seed=SEED)
 
+    # Calcula estadisticos de resumen (media, desviacion estandar, IC95% percentilico)
+    # de un array de remuestras bootstrap.
+    # Entrada: arr ndarray con los valores de una metrica en n remuestras.
+    # Salida: diccionario con claves 'mean', 'std', 'ci_low' y 'ci_high'.
     def ci95(arr: np.ndarray) -> dict:
         return {
             "mean":    float(np.mean(arr)),
@@ -331,9 +394,16 @@ def run_endpoint(
 # Main
 # ---------------------------------------------------------------------------
 
+# Punto de entrada principal del script de baseline Cox.
+# Lee el dataset derivado del ETL, itera sobre los dos endpoints (OS y PFS),
+# invoca run_endpoint() para cada uno y persiste los resultados en JSON y CSV.
+# Imprime un resumen legible con C-index e IBS por fold y las estadisticas
+# del bootstrap (media e IC95%) para su inclusion en la memoria D3.
+# Entrada: ninguna (usa las constantes del modulo y DATASET_PATH).
+# Salida: 0 si exito, 1 si el dataset no existe.
 def main() -> int:
     logger = setup_logger()
-    np.random.seed(SEED)
+    np.random.seed(SEED)  # semilla global para reproducibilidad de numpy
 
     if not DATASET_PATH.exists():
         logger.error("Dataset no encontrado: %s. Ejecuta primero el ETL.", DATASET_PATH)

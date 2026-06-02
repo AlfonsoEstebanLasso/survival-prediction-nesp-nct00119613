@@ -66,21 +66,43 @@ OUTPUT_DIR        = PROJECT_ROOT / "output"
 # y < 0  => censurado en el tiempo |y|
 # ---------------------------------------------------------------------------
 
+# _xgb_labels: convierte el array estructurado de supervivencia al formato
+# de etiquetas que requiere XGBoost con objective='survival:cox'.
+# Entrada: array numpy estructurado con campos 'event' (bool) y 'time' (float).
+# Salida: array 1-D donde los tiempos de evento son positivos y los de censura negativos.
+# Justificacion: la perdida de Cox de XGBoost espera y > 0 para eventos observados
+# e y < 0 para observaciones censuradas; esta transformacion es obligatoria y es
+# el unico punto de contacto entre el formato interno de sksurv y la API de XGBoost.
 def _xgb_labels(y_struct: np.ndarray) -> np.ndarray:
-    t = y_struct["time"].astype(float)
-    return np.where(y_struct["event"], t, -t)
+    t = y_struct["time"].astype(float)  # tiempo en dias hasta el evento o censura
+    return np.where(y_struct["event"], t, -t)  # positivo=evento, negativo=censura
 
 
 # ---------------------------------------------------------------------------
 # Estimador de Breslow para funciones de supervivencia
 # ---------------------------------------------------------------------------
 
+# BreslowEstimator: estima el hazard acumulado basal H0(t) mediante el estimador
+# no parametrico de Breslow y lo combina con los log-hazards del modelo para
+# obtener curvas de supervivencia individuales S(t|x) = exp(-H0(t) * exp(log_h(x))).
+# Justificacion: XGBoost con survival:cox produce log-hazards relativos pero no
+# curvas de supervivencia absolutas; el estimador de Breslow (ajustado SOLO sobre
+# el fold de entrenamiento) cierra esa brecha sin asumir una forma parametrica
+# para la funcion basal, lo cual es coherente con el supuesto semiparametrico de Cox.
+# Este componente es imprescindible para calcular el IBS (Integrated Brier Score),
+# que requiere probabilidades de supervivencia y no solo rankings de riesgo.
 class BreslowEstimator:
     """
     Estima la funcion de supervivencia basal H0(t) a partir de los scores del modelo
     y la construye para nuevas observaciones: S(t|x) = exp(-H0(t) * exp(log_h(x))).
     """
 
+    # fit: ajusta el estimador de Breslow sobre los datos de entrenamiento del fold.
+    # Entradas: array estructurado de supervivencia y log-hazards predichos por XGBoost.
+    # Salida: la propia instancia con times_ y cumhaz_ calculados (patron fluent).
+    # Justificacion: se ordena por tiempo para recorrer los eventos en orden cronologico
+    # y calcular el incremento de hazard en cada tiempo de evento como d(t) / R(t),
+    # donde d(t) son los eventos y R(t) la suma de exp(log_h) sobre los sujetos en riesgo.
     def fit(self, y_struct: np.ndarray, log_hazard: np.ndarray) -> "BreslowEstimator":
         event = y_struct["event"]
         time  = y_struct["time"]
@@ -100,6 +122,13 @@ class BreslowEstimator:
         self.cumhaz_ = np.cumsum(H0)
         return self
 
+    # surv_matrix: construye la matriz de supervivencia S(t|x) para un conjunto de sujetos
+    # y una rejilla de tiempos arbitraria.
+    # Entradas: log-hazards del conjunto de evaluacion y vector de tiempos de la rejilla.
+    # Salida: array de forma (n_samples, len(times)) con probabilidades en [0, 1].
+    # Justificacion: la interpolacion lineal de cumhaz_ sobre times evita extrapolar
+    # fuera del rango observado (left=0, right=cumhaz_[-1]), garantizando que S(t) sea
+    # monotona decreciente y que el IBS se calcule sobre tiempos validos del fold.
     def surv_matrix(self, log_hazard: np.ndarray, times: np.ndarray) -> np.ndarray:
         """Array (n_samples, len(times)) con probabilidades de supervivencia."""
         H0_t = np.interp(times, self.times_, self.cumhaz_,
@@ -111,11 +140,22 @@ class BreslowEstimator:
 # Optuna: objetivo XGBoost con early stopping
 # ---------------------------------------------------------------------------
 
+# _make_xgb_objective: genera la funcion objetivo de Optuna para XGBoost con survival:cox.
+# Recibe las particiones internas de entrenamiento y validacion ya preprocesadas,
+# y la semilla del fold. Devuelve una funcion 'objective' que Optuna invoca en cada trial.
+# Justificacion: el early stopping nativo de XGBoost (early_stopping_rounds=25) detiene
+# el entrenamiento cuando la funcion de perdida de Cox en el conjunto interno de validacion
+# deja de mejorar durante 25 rondas consecutivas, lo que determina automaticamente el numero
+# optimo de arboles sin necesidad de fijarlo a priori. Esto es especialmente relevante en
+# cohortes pequenas (n=479) donde el sobreajuste aparece con pocos estimadores.
+# El criterio de evaluacion final es el C-index (concordance_index_censored) y no la perdida
+# de entrenamiento, lo que alinea la busqueda de hiperparametros con la metrica principal
+# del protocolo de evaluacion.
 def _make_xgb_objective(X_inner: np.ndarray, X_val: np.ndarray,
                          y_inner: np.ndarray, y_val: np.ndarray,
                          fold_seed: int):
-    y_inner_xgb = _xgb_labels(y_inner)
-    y_val_xgb   = _xgb_labels(y_val)
+    y_inner_xgb = _xgb_labels(y_inner)  # etiquetas en formato survival:cox para el subconjunto interno
+    y_val_xgb   = _xgb_labels(y_val)    # etiquetas en formato survival:cox para el subconjunto de validacion interna
 
     def objective(trial: optuna.Trial) -> float:
         params = dict(
@@ -157,6 +197,14 @@ def _make_xgb_objective(X_inner: np.ndarray, X_val: np.ndarray,
     return objective
 
 
+# optimize_xgb: ejecuta el estudio Optuna TPE para XGBoost con survival:cox.
+# Entradas: conjuntos internos de entrenamiento y validacion (numpy arrays preprocesados),
+# y la semilla especifica del fold.
+# Salida: tupla (mejores hiperparametros, n_estimators optimo derivado del best_iteration).
+# Justificacion: el muestreador TPE con 40 trials ofrece un equilibrio entre la cobertura
+# del espacio de hiperparametros y el coste computacional. La semilla por fold garantiza
+# que los trials sean reproducibles pero distintos entre folds, evitando sesgos de
+# seleccion de hiperparametros hacia las caracteristicas de un fold especifico.
 def optimize_xgb(X_inner: np.ndarray, X_val: np.ndarray,
                  y_inner: np.ndarray, y_val: np.ndarray,
                  fold_seed: int) -> tuple[dict, int]:
@@ -181,6 +229,19 @@ def optimize_xgb(X_inner: np.ndarray, X_val: np.ndarray,
 # Un fold
 # ---------------------------------------------------------------------------
 
+# run_fold: ejecuta el ciclo completo de un fold de la validacion cruzada para XGBoost.
+# Entradas: DataFrames de train y test del fold, arrays estructurados de supervivencia,
+# rejilla global de tiempos, indice del fold y logger.
+# Salida: diccionario con C-index, IBS, log-hazards OOF, matriz de supervivencia y
+# tiempo maximo observado en entrenamiento.
+# Justificacion: el diseno de dos etapas (Optuna interna + reajuste en fold completo)
+# separa la busqueda de hiperparametros de la estimacion final del modelo, evitando
+# que el conjunto de test externo contamine ninguna decision de modelado.
+# El early stopping en el reajuste final usa el mismo hold-out interno del 20% para
+# determinar n_estimators; a continuacion el modelo se vuelve a ajustar en el fold
+# completo con ese numero de arboles, maximizando el uso de los datos de entrenamiento.
+# Nota oncologica: para OS y PFS con censura, el Breslow estimator (ajustado en train)
+# convierte los log-hazards del modelo en probabilidades S(t|x) necesarias para el IBS.
 def run_fold(X_tr: pd.DataFrame, X_te: pd.DataFrame,
              y_tr: np.ndarray, y_te: np.ndarray,
              global_times: np.ndarray, fold_i: int,
@@ -207,16 +268,16 @@ def run_fold(X_tr: pd.DataFrame, X_te: pd.DataFrame,
 
     # Modelo final: early stopping sobre hold-out del 20% del fold de entrenamiento.
     # El hold-out SOLO controla n_estimators; el outer test nunca se usa aqui.
-    y_tr_xgb      = _xgb_labels(y_tr)
-    y_inner_xgb   = _xgb_labels(y_tr[inner_tr_idx])
-    y_holdout_xgb = _xgb_labels(y_tr[inner_val_idx])
+    y_tr_xgb      = _xgb_labels(y_tr)                   # etiquetas del fold completo para reajuste final
+    y_inner_xgb   = _xgb_labels(y_tr[inner_tr_idx])     # etiquetas del subconjunto interno de entrenamiento
+    y_holdout_xgb = _xgb_labels(y_tr[inner_val_idx])    # etiquetas del hold-out para early stopping
 
     final_model = xgb.XGBRegressor(
         objective="survival:cox",
         eval_metric="cox-nloglik",
-        n_estimators=XGB_MAX_TREES,
-        early_stopping_rounds=XGB_EARLY_STOP,
-        seed=SEED,
+        n_estimators=XGB_MAX_TREES,          # techo de arboles; early stopping lo reducira
+        early_stopping_rounds=XGB_EARLY_STOP, # detiene si cox-nloglik no mejora en 25 rondas
+        seed=SEED,                            # semilla global para reproducibilidad del reajuste
         n_jobs=-1,
         verbosity=0,
         **best_params,
@@ -226,7 +287,7 @@ def run_fold(X_tr: pd.DataFrame, X_te: pd.DataFrame,
         eval_set=[(X_tr_proc[inner_val_idx], y_holdout_xgb)],
         verbose=False,
     )
-    best_n_trees = final_model.best_iteration + 1
+    best_n_trees = final_model.best_iteration + 1  # n_estimators optimo determinado por early stopping
     logger.info("    Fold %d n_trees_optimo=%d", fold_i + 1, best_n_trees)
 
     # Reajustar el modelo en el fold COMPLETO con el n_estimators optimo.
@@ -250,7 +311,8 @@ def run_fold(X_tr: pd.DataFrame, X_te: pd.DataFrame,
     except Exception:
         c_index = float("nan")
 
-    # Breslow sobre el fold de entrenamiento completo para S(t|x).
+    # Breslow ajustado sobre el fold de entrenamiento completo: garantiza que H0(t)
+    # se estime sin ver los datos del fold de test, cumpliendo la regla anti-fuga.
     breslow = BreslowEstimator().fit(y_tr, log_h_tr)
 
     fold_times = safe_fold_times(global_times, y_tr)
@@ -271,6 +333,18 @@ def run_fold(X_tr: pd.DataFrame, X_te: pd.DataFrame,
 # Por endpoint
 # ---------------------------------------------------------------------------
 
+# run_endpoint: orquesta la validacion cruzada estratificada k=5 y el bootstrap
+# para un endpoint concreto (OS o PFS) con XGBoost survival:cox.
+# Entradas: DataFrame completo del dataset, nombre del endpoint, columnas de evento
+# y tiempo, y logger.
+# Salida: diccionario con metricas CV (C-index e IBS por fold, media, std, CV%) y
+# estimaciones bootstrap (media, IC95%) listas para serializar a JSON.
+# Justificacion: la estratificacion de los folds garantiza proporciones de evento
+# homogeneas. Los log-hazards OOF se usan para el bootstrap de C-index y las
+# curvas de supervivencia OOF (via Breslow de cada fold) para el bootstrap de IBS.
+# El coeficiente de variacion (CV%) entre folds es el tercer criterio de seleccion
+# de modelo a priori (estabilidad), que junto con C-index e IBS determina si
+# XGBoost supera al Cox baseline en esta cohorte de n=479 sujetos.
 def run_endpoint(df: pd.DataFrame, endpoint_name: str,
                  event_col: str, time_col: str,
                  logger: logging.Logger) -> dict:
@@ -295,7 +369,7 @@ def run_endpoint(df: pd.DataFrame, endpoint_name: str,
         )
         fold_metrics.append({"fold": fold_i + 1,
                              "c_index": res["c_index"], "ibs": res["ibs"]})
-        oof_risk[test_idx] = res["risk_scores"]
+        oof_risk[test_idx] = res["risk_scores"]  # agregacion OOF: log-hazard de cada sujeto desde su fold de test
         oof_surv[test_idx] = res["surv_full"]
         t_max_per_fold.append(res["t_max_obs"])
 
@@ -340,6 +414,9 @@ def run_endpoint(df: pd.DataFrame, endpoint_name: str,
 # Main
 # ---------------------------------------------------------------------------
 
+# setup_logger: configura y devuelve un logger con formato de hora, nivel e
+# identificador de modulo. Evita anadir manejadores duplicados si se invoca
+# varias veces en la misma sesion de Python.
 def setup_logger(name: str) -> logging.Logger:
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
@@ -351,6 +428,12 @@ def setup_logger(name: str) -> logging.Logger:
     return logger
 
 
+# main: punto de entrada del script XGBoost. Carga el dataset derivado, ejecuta
+# la validacion cruzada con bootstrap para OS y PFS, y serializa los resultados
+# en output/xgb_metrics.json.
+# Justificacion: la semilla global (np.random.seed) fija el estado del generador
+# de numeros aleatorios de NumPy antes de cualquier operacion, garantizando que
+# los resultados sean identicos en distintas ejecuciones del script completo.
 def main() -> int:
     logger = setup_logger("xgb_model")
     np.random.seed(SEED)
