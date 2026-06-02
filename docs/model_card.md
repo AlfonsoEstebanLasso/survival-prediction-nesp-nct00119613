@@ -71,7 +71,7 @@ Métricas de evaluación y justificación de su elección. Todas se calculan sob
 |---------|---------------------------|-----------------|-----------------|
 | C-index | 0.600 +/- 0.042 (7.1%) | 0.599 | [0.567, 0.629] |
 | IBS | 0.182 +/- 0.013 (7.2%) | 0.182 | [0.172, 0.191] |
-| AUC dinamica media | -- | 0.645 | [0.601, 0.690] |
+| AUC dinámica media | -- | 0.645 | [0.601, 0.690] |
 
 Detalle por fold (OS): fold 1 = 0.528, fold 2 = 0.614, fold 3 = 0.635, fold 4 = 0.623, fold 5 = 0.599.
 
@@ -81,7 +81,7 @@ Detalle por fold (OS): fold 1 = 0.528, fold 2 = 0.614, fold 3 = 0.635, fold 4 = 
 |---------|---------------------------|-----------------|-----------------|
 | C-index | 0.552 +/- 0.028 (5.1%) | 0.555 | [0.525, 0.586] |
 | IBS | 0.182 +/- 0.012 (6.4%) | 0.182 | [0.172, 0.192] |
-| AUC dinamica media | -- | 0.584 | [0.536, 0.632] |
+| AUC dinámica media | -- | 0.584 | [0.536, 0.632] |
 
 ### Comparación de modelos (OS, criterio a priori)
 
@@ -125,9 +125,9 @@ Interpretación clínica descriptiva: el estado funcional reducido (ECOG 2) y el
 
 ### Calibración
 
-Curvas de fiabilidad para supervivencia con bandas bootstrap (n=1000) calculadas sobre predicciones OOF. El Brier Score puntual se mantiene por debajo del modelo nulo en todos los horizontes temporales evaluados (44 a 494 dias en OS), con IBS OS = 0.182 IC95% [0.172, 0.191]. El IBS PFS = 0.182 IC95% [0.172, 0.192]. La calibración es moderada y coherente con el nivel de discriminación observado.
+Curvas de fiabilidad para supervivencia con bandas bootstrap (n=1000) calculadas sobre predicciones OOF. El Brier Score puntual se mantiene por debajo del modelo nulo en todos los horizontes temporales evaluados (44 a 494 días en OS), con IBS OS = 0.182 IC95% [0.172, 0.191]. El IBS PFS = 0.182 IC95% [0.172, 0.192]. La calibración es moderada y coherente con el nivel de discriminación observado.
 
-Postcalibración (Platt e isotónica) evaluada; mejoras marginales y sin significación estadística frente a los IC bootstrap. Modelo final reportado sin postcalibración por parsimonia (decisión registrada en el Decision log).
+Postcalibración (Platt e isotónica) evaluada; mejoras marginales y sin significación estadística frente a los IC bootstrap. Modelo final reportado sin postcalibración por parsimonia (decisión registrada en el Decisión log).
 
 ### Análisis por subgrupos (factores)
 
@@ -144,8 +144,8 @@ Postcalibración (Platt e isotónica) evaluada; mejoras marginales y sin signifi
 | Comorbilidades altas (MEDHX_N > 1) | 226 | 191 | 0.591 | [0.546, 0.637] | 0.186 |
 | Sexo = 0 | 315 | 266 | 0.595 | [0.555, 0.637] | 0.173 |
 | Sexo = 1 | 164 | 131 | 0.586 | [0.530, 0.644] | 0.197 |
-| Edad < 61 anos | 225 | 182 | 0.570 | [0.519, 0.616] | 0.172 |
-| Edad >= 61 anos | 254 | 215 | 0.583 | [0.542, 0.624] | 0.190 |
+| Edad < 61 años | 225 | 182 | 0.570 | [0.519, 0.616] | 0.172 |
+| Edad >= 61 años | 254 | 215 | 0.583 | [0.542, 0.624] | 0.190 |
 | Tiempo desde diag. < mediana (0.49 m) | 219 | 187 | 0.599 | [0.553, 0.645] | 0.190 |
 | Tiempo desde diag. >= mediana (0.49 m) | 260 | 210 | 0.599 | [0.555, 0.640] | 0.174 |
 
@@ -162,8 +162,8 @@ Postcalibración (Platt e isotónica) evaluada; mejoras marginales y sin signifi
 | Comorbilidades altas (MEDHX_N > 1) | 226 | 207 | 0.545 | [0.498, 0.590] | 0.177 |
 | Sexo = 0 | 315 | 291 | 0.537 | [0.499, 0.579] | 0.180 |
 | Sexo = 1 | 164 | 149 | 0.541 | [0.484, 0.598] | 0.189 |
-| Edad < 61 anos | 225 | 202 | 0.516 | [0.471, 0.560] | 0.182 |
-| Edad >= 61 anos | 254 | 238 | 0.564 | [0.518, 0.606] | 0.184 |
+| Edad < 61 años | 225 | 202 | 0.516 | [0.471, 0.560] | 0.182 |
+| Edad >= 61 años | 254 | 238 | 0.564 | [0.518, 0.606] | 0.184 |
 | Tiempo desde diag. < mediana (0.49 m) | 219 | 206 | 0.531 | [0.486, 0.578] | 0.189 |
 | Tiempo desde diag. >= mediana (0.49 m) | 260 | 234 | 0.572 | [0.528, 0.616] | 0.177 |
 
