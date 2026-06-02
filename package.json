@@ -10,6 +10,7 @@
     "build:d5": "node docs/scripts/build_d5.js"
   },
   "dependencies": {
-    "docx": "^8.5.0"
+    "docx": "^8.5.0",
+    "pptxgenjs": "^4.0.1"
   }
 }

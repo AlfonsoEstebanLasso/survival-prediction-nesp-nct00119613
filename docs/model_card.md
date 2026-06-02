@@ -103,7 +103,7 @@ Postcalibracion (Platt e isotonica) evaluada; mejoras marginales y sin significa
 | Brazo NESP (TXG=1) | 240 | 205 | 0.587 | [0.542, 0.629] | 0.186 |
 | Brazo placebo (TXG=0) | 239 | 192 | 0.611 | [0.564, 0.655] | 0.177 |
 | ECOG 1 | 379 | 306 | 0.574 | [0.537, 0.607] | 0.178 |
-| ECOG 2 | 100 | 91 | 0.525 | [0.453, 0.593] | 0.193 |
+| ECOG 2 | 100 | 91 | 0.524 | [0.453, 0.593] | 0.193 |
 | Comorbilidades bajas (MEDHX_N <= 1) | 253 | 206 | 0.601 | [0.561, 0.642] | 0.178 |
 | Comorbilidades altas (MEDHX_N > 1) | 226 | 191 | 0.591 | [0.546, 0.637] | 0.186 |
 | Sexo = 0 | 315 | 266 | 0.595 | [0.555, 0.637] | 0.173 |
@@ -131,7 +131,7 @@ Postcalibracion (Platt e isotonica) evaluada; mejoras marginales y sin significa
 | Tiempo desde diag. < mediana (0.49 m) | 219 | 206 | 0.531 | [0.486, 0.578] | 0.189 |
 | Tiempo desde diag. >= mediana (0.49 m) | 260 | 234 | 0.572 | [0.528, 0.616] | 0.177 |
 
-**Interpretacion:** el rendimiento es consistente entre estratos sin caidas abruptas. La discriminacion es menor en ECOG 2 en ambos endpoints (OS: 0.525; PFS: 0.484), coherente con menor heterogeneidad pronostica cuando el riesgo basal es ya elevado. Los dos brazos de aleatorizacion muestran rendimientos similares, lo que sugiere transferibilidad del modelo entre estratos de tratamiento al nivel de discriminacion alcanzable con estas senales basales.
+**Interpretacion:** el rendimiento es consistente entre estratos sin caidas abruptas. La discriminacion es menor en ECOG 2 en ambos endpoints (OS: 0.524; PFS: 0.484), coherente con menor heterogeneidad pronostica cuando el riesgo basal es ya elevado. Los dos brazos de aleatorizacion muestran rendimientos similares, lo que sugiere transferibilidad del modelo entre estratos de tratamiento al nivel de discriminacion alcanzable con estas senales basales.
 
 ## Limitaciones
 
