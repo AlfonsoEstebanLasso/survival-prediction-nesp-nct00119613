@@ -2,13 +2,13 @@
 src/data/synthetic_data.py
 
 Proposito:
-    Generacion de datos sinteticos tabulares con CTGAN (SDV), evaluacion de utilidad
+    Generacion de datos sintéticos tabulares con CTGAN (SDV), evaluacion de utilidad
     mediante TSTR (Train on Synthetic, Test on Real) sobre el modelo final Cox PH para OS,
-    y evaluacion del riesgo de reidentificacion en tres dimensiones: membership inference
+    y evaluacion del riesgo de reidentificación en tres dimensiones: membership inference
     con shadow models, unicidad de cuasi-identificadores (k-anonimidad) y distancia al
     registro mas cercano (DCR).
 
-ADVERTENCIA: Los datos sinteticos son exclusivamente para prototipado metodologico.
+ADVERTENCIA: Los datos sintéticos son exclusivamente para prototipado metodologico.
     No refuerzan las conclusiones del modelo principal de supervivencia, no representan
     pacientes reales y no deben utilizarse con fines clinicos ni para extraer conclusiones
     epidemiologicas. El generador se ajusta sobre n=479 sujetos de un ensayo clinico
@@ -19,7 +19,7 @@ Entradas:
     output/cox_baseline_cv_detail.csv   (opcional, para TRTR por fold)
 
 Salidas (en output/):
-    synthetic_dataset.csv           Dataset sintetico (excluido del control de versiones)
+    synthetic_dataset.csv           Dataset sintético (excluido del control de versiones)
     synthetic_metrics.json          Metricas de utilidad y riesgo de privacidad
     synthetic_tstr_comparison.csv   Comparativa TRTR vs TSTR por fold (OS)
     fig_synthetic_tstr.png          Grafico de barras TRTR vs TSTR
@@ -94,14 +94,14 @@ C_GRAY  = "#888888"
 ACCEPT: dict[str, float] = {
     "mi_auc_max":            0.60,  # AUC del ataque MI: <= 0.60 aceptable
     "mi_tpr_fpr01_max":      0.20,  # TPR a FPR=0.1: <= 0.20 aceptable
-    "kanon_k1_max":          0.05,  # <= 5 % de registros sinteticos unicos (k=1)
+    "kanon_k1_max":          0.05,  # <= 5 % de registros sintéticos unicos (k=1)
     "kanon_k2_max":          0.10,  # <= 10 % con k<=2
     "kanon_k5_max":          0.20,  # <= 20 % con k<=5
     "dcr_p5_rrdr_ratio_min": 0.50,  # DCR_p5 / RRDR_mediana >= 0.50
 }
 
 DISCLAIMER = (
-    "ADVERTENCIA: Los datos sinteticos son exclusivamente para prototipado metodologico. "
+    "ADVERTENCIA: Los datos sintéticos son exclusivamente para prototipado metodologico. "
     "No refuerzan las conclusiones del modelo principal de supervivencia, "
     "no representan pacientes reales y no deben utilizarse con fines clinicos "
     "ni para extraer conclusiones epidemiologicas."
@@ -174,7 +174,7 @@ def _make_y(event: np.ndarray, time: np.ndarray) -> np.ndarray:
 # Instancia el preprocesador (imputacion, estandarizacion, one-hot) y lo ajusta
 # exclusivamente sobre las columnas FEATURES del dataframe recibido.
 # Principio anti-leakage: el ajuste nunca toca datos de test ni datos reales cuando
-# se invoca en el contexto TSTR (donde df es el dataset sintetico).
+# se invoca en el contexto TSTR (donde df es el dataset sintético).
 # Entrada: dataframe con las columnas de FEATURES. Salida: (X_procesado, preprocesador_ajustado).
 def _fit_preprocessor(df: pd.DataFrame):
     """Ajusta el preprocesador solo sobre df[FEATURES] y lo devuelve junto con X procesado."""
@@ -241,7 +241,7 @@ def _train_ctgan(df: pd.DataFrame, epochs: int, seed_offset: int = 0):
     return synth
 
 
-# Corrige tipos y recorta rangos del dataset sintetico al espacio plausible del dataset real.
+# Corrige tipos y recorta rangos del dataset sintético al espacio plausible del dataset real.
 # CTGAN puede generar valores fuera del dominio clinico valido (p.ej., tiempos negativos,
 # indicadores de evento fuera de {0,1} o niveles de ECOG no definidos). Esta funcion aplica:
 # - Clipping de binarias a {0,1} y de tiempos a valores positivos.
@@ -249,9 +249,9 @@ def _train_ctgan(df: pd.DataFrame, epochs: int, seed_offset: int = 0):
 # - Clipping de AGE al rango observado en los datos reales.
 # - Proyeccion de SEXCD y B_ECOGN a los valores validos del dataset real, usando la moda
 #   como valor de reemplazo cuando se genera un nivel inexistente.
-# Entrada: dataset sintetico crudo y dataset real de referencia. Salida: dataset corregido.
+# Entrada: dataset sintético crudo y dataset real de referencia. Salida: dataset corregido.
 def _postprocess(df_syn: pd.DataFrame, df_real: pd.DataFrame) -> pd.DataFrame:
-    """Corrige tipos y recorta rangos del dataset sintetico al rango plausible del real."""
+    """Corrige tipos y recorta rangos del dataset sintético al rango plausible del real."""
     df = df_syn.copy()
 
     for col in ["DTH", "PFSCD", "TXG", "EVALPRIM", "EVALQOL"]:
@@ -289,14 +289,14 @@ def _postprocess(df_syn: pd.DataFrame, df_real: pd.DataFrame) -> pd.DataFrame:
 
 
 # Orquesta el entrenamiento del sintetizador CTGAN principal y la generacion de N_SYNTHETIC
-# registros sinteticos a partir del dataset real de n=479 sujetos.
+# registros sintéticos a partir del dataset real de n=479 sujetos.
 # Flujo: seleccion de columnas relevantes (ALL_COLS), entrenamiento con MAIN_EPOCHS=300,
 # muestreo y postprocesado para garantizar coherencia de dominio clinico.
 # Las filas con NaN en covariables predictoras se eliminan con aviso al logger.
 # N_SYNTHETIC = 479 (igual al real) para que las comparaciones de distribucion sean directas.
-# Nota de privacidad: los datos sinteticos se destinan UNICAMENTE a prototipado metodologico;
+# Nota de privacidad: los datos sintéticos se destinan UNICAMENTE a prototipado metodologico;
 # no representan pacientes reales ni deben usarse con fines clinicos.
-# Entrada: dataset real y logger. Salida: dataframe sintetico postprocesado.
+# Entrada: dataset real y logger. Salida: dataframe sintético postprocesado.
 def generate_synthetic(df_real: pd.DataFrame, logger: logging.Logger) -> pd.DataFrame:
     """Entrena el sintetizador CTGAN sobre el dataset real y genera N_SYNTHETIC registros."""
     cols   = [c for c in ALL_COLS if c in df_real.columns]
@@ -305,7 +305,7 @@ def generate_synthetic(df_real: pd.DataFrame, logger: logging.Logger) -> pd.Data
     logger.info("Entrenando CTGAN principal (epocas=%d, n_real=%d)...", MAIN_EPOCHS, len(df_fit))
     synth  = _train_ctgan(df_fit, epochs=MAIN_EPOCHS, seed_offset=0)
 
-    logger.info("Generando %d registros sinteticos...", N_SYNTHETIC)
+    logger.info("Generando %d registros sintéticos...", N_SYNTHETIC)
     df_syn = synth.sample(num_rows=N_SYNTHETIC)
     df_syn = _postprocess(df_syn, df_real)
 
@@ -322,17 +322,17 @@ def generate_synthetic(df_real: pd.DataFrame, logger: logging.Logger) -> pd.Data
 # TSTR: Train on Synthetic, Test on Real
 # ---------------------------------------------------------------------------
 
-# Evalua la utilidad del dataset sintetico mediante la metodologia TSTR
+# Evalua la utilidad del dataset sintético mediante la metodologia TSTR
 # (Train on Synthetic, Test on Real) con validacion cruzada estratificada k=5 sobre OS.
 # Protocolo TSTR puro:
-#   1. El preprocesador se ajusta UNICAMENTE sobre los datos sinteticos (sin ver el real),
-#      garantizando que no hay fuga de informacion del real al sintetico.
-#   2. Cox PH se ajusta sobre todos los datos sinteticos transformados.
+#   1. El preprocesador se ajusta UNICAMENTE sobre los datos sintéticos (sin ver el real),
+#      garantizando que no hay fuga de informacion del real al sintético.
+#   2. Cox PH se ajusta sobre todos los datos sintéticos transformados.
 #   3. El C-index se calcula en cada fold de test del dataset real, aplicando el preprocesador
-#      ya ajustado sobre sinteticos mediante .transform() (nunca .fit_transform()).
-# La comparacion TSTR vs TRTR cuantifica cuanta utilidad predictiva conservan los sinteticos
+#      ya ajustado sobre sintéticos mediante .transform() (nunca .fit_transform()).
+# La comparacion TSTR vs TRTR cuantifica cuanta utilidad predictiva conservan los sintéticos
 # respecto al modelo entrenado en datos reales (referencia: C-index TRTR = 0.600 +/- 0.042).
-# Entrada: dataset real, dataset sintetico y logger. Salida: diccionario con metricas de utilidad.
+# Entrada: dataset real, dataset sintético y logger. Salida: diccionario con metricas de utilidad.
 def evaluate_tstr(
     df_real: pd.DataFrame,
     df_syn: pd.DataFrame,
@@ -341,26 +341,26 @@ def evaluate_tstr(
     """
     Para cada fold del CV estratificado k=5 sobre los datos reales:
         - Preprocesador ajustado en df_syn (escenario TSTR puro).
-        - Cox ajustado en todos los datos sinteticos.
+        - Cox ajustado en todos los datos sintéticos.
         - C-index evaluado en el fold de test real.
     Compara con TRTR (del Decision Log: CV OS C-index = 0.600 +/- 0.042).
     """
     logger.info("Evaluando TSTR (Cox PH, OS)...")
 
-    # Preprocesado ajustado sobre sinteticos: principio TSTR puro, sin ver datos reales
+    # Preprocesado ajustado sobre sintéticos: principio TSTR puro, sin ver datos reales
     n_events_syn = int(pd.to_numeric(df_syn.get("DTH", pd.Series(dtype=float)),
                                      errors="coerce").fillna(0).sum())
     if n_events_syn < 10:
-        logger.error("Insuficientes eventos en sinteticos (%d); TSTR no ejecutado.", n_events_syn)
+        logger.error("Insuficientes eventos en sintéticos (%d); TSTR no ejecutado.", n_events_syn)
         return {}
 
-    X_syn_proc, preproc_syn = _fit_preprocessor(df_syn)  # preprocesador ajustado solo sobre sinteticos
+    X_syn_proc, preproc_syn = _fit_preprocessor(df_syn)  # preprocesador ajustado solo sobre sintéticos
     y_syn = _make_y(df_syn["DTH"].values, df_syn["DTHDY"].values)
 
     cox_tstr = CoxPHSurvivalAnalysis(alpha=0, ties="efron", n_iter=100)
     cox_tstr.fit(X_syn_proc, y_syn)
 
-    # Evaluacion fold a fold sobre el real: el preprocesador ya ajustado se aplica con .transform()
+    # Evaluación fold a fold sobre el real: el preprocesador ya ajustado se aplica con .transform()
     y_real  = _make_y(df_real["DTH"].values, df_real["DTHDY"].values)
     X_real  = df_real[FEATURES].copy()
     strata  = df_real["DTH"].astype(int).values * 2 + df_real["TXG"].astype(int).values  # estratificacion por evento y brazo
@@ -428,13 +428,13 @@ def evaluate_tstr(
 # Protocolo de shadow models:
 #   - Cada shadow se entrena sobre SHADOW_TRAIN_FRAC (70%) del dataset real (subconjunto aleatorio).
 #   - El registro pertenece a la clase "miembro" si fue incluido en ese subconjunto de entrenamiento.
-#   - Score de ataque: negativo de la distancia minima del registro real al dataset sintetico
+#   - Score de ataque: negativo de la distancia minima del registro real al dataset sintético
 #     del shadow (menor distancia => mayor probabilidad de haber sido "miembro").
 #   - Se acumulan pares (score, etiqueta) de todos los shadows y se calcula AUC y TPR@FPR=0.1.
 # Criterios a priori fijados: AUC <= 0.60, TPR@FPR=0.1 <= 0.20.
 # Un AUC cercano a 0.5 indica que el sintetizador no memoriza registros individuales.
 # Nota oncologica: cuasi-identificadores como edad, sexo y ECOG aumentan el riesgo de
-# reidentificacion de pacientes oncologicos en datasets de ensayos clinicos pequenos (n=479).
+# reidentificación de pacientes oncologicos en datasets de ensayos clinicos pequenos (n=479).
 # Entrada: dataset real y logger. Salida: diccionario con AUC, TPR@FPR=0.1 y curva ROC,
 # o None si todos los shadow models fallaron.
 def membership_inference_shadow(
@@ -446,7 +446,7 @@ def membership_inference_shadow(
 
     Metodologia:
         - Cada shadow model se entrena sobre el SHADOW_TRAIN_FRAC del dataset real.
-        - Para cada registro real, se calcula su distancia minima al dataset sintetico
+        - Para cada registro real, se calcula su distancia minima al dataset sintético
           generado por ese shadow model.
         - Score de ataque: negativo de la distancia (menor distancia = mayor probabilidad
           de haber sido miembro del entrenamiento).
@@ -491,16 +491,16 @@ def membership_inference_shadow(
             continue
 
         if len(df_syn_s) < 10:
-            logger.warning("  Shadow %d: datos sinteticos insuficientes; saltando.", si + 1)
+            logger.warning("  Shadow %d: datos sintéticos insuficientes; saltando.", si + 1)
             continue
 
-        # Transformar sinteticos al espacio comun con .transform() para que las distancias sean comparables
+        # Transformar sintéticos al espacio comun con .transform() para que las distancias sean comparables
         try:
             X_syn_s = preproc_ref.transform(df_syn_s[FEATURES].copy())
         except Exception:
             continue
 
-        # Calcular distancia minima de cada registro real al sintetico del shadow (score de ataque)
+        # Calcular distancia minima de cada registro real al sintético del shadow (score de ataque)
         dist_mat = cdist(X_real_all, X_syn_s, metric="euclidean")  # (n_real, n_syn)
         min_dists = dist_mat.min(axis=1)
 
@@ -545,15 +545,15 @@ def membership_inference_shadow(
 # K-anonimidad (quasi-identifier uniqueness)
 # ---------------------------------------------------------------------------
 
-# Mide el riesgo de reidentificacion mediante k-anonimidad sobre cuasi-identificadores.
+# Mide el riesgo de reidentificación mediante k-anonimidad sobre cuasi-identificadores.
 # La k-anonimidad cuantifica cuantos registros del dataset real comparten los mismos valores
-# de cuasi-identificadores que un registro sintetico dado. Un registro sintetico con k=1
+# de cuasi-identificadores que un registro sintético dado. Un registro sintético con k=1
 # es "unico" y podria usarse como pivote para reidentificar al sujeto real correspondiente.
-# Cuasi-identificadores seleccionados: AGE (en intervalos de AGE_BIN_STEP=5 anos), SEXCD y B_ECOGN.
+# Cuasi-identificadores seleccionados: AGE (en intervalos de AGE_BIN_STEP=5 años), SEXCD y B_ECOGN.
 # Estos tres campos son los cuasi-identificadores mas relevantes en oncologia clinica porque
 # combinados con el diagnostico pueden identificar a pacientes en ensayos pequenos (n=479).
-# Criterios a priori: registros sinteticos unicos (k=1) < 5%, k<=2 < 10%, k<=5 < 20%.
-# Entrada: dataset sintetico, dataset real (como referencia de conteos) y logger.
+# Criterios a priori: registros sintéticos unicos (k=1) < 5%, k<=2 < 10%, k<=5 < 20%.
+# Entrada: dataset sintético, dataset real (como referencia de conteos) y logger.
 # Salida: diccionario con fracciones por nivel k y flags de aceptacion.
 def compute_k_anonymity(
     df_syn: pd.DataFrame,
@@ -561,20 +561,20 @@ def compute_k_anonymity(
     logger: logging.Logger,
 ) -> dict:
     """
-    Para cada registro sintetico, cuenta cuantos registros reales coinciden en los
-    cuasi-identificadores: AGE (bin de 5 anos), SEXCD y B_ECOGN.
+    Para cada registro sintético, cuenta cuantos registros reales coinciden en los
+    cuasi-identificadores: AGE (bin de 5 años), SEXCD y B_ECOGN.
 
-    Reporta la fraccion de registros sinteticos con k=1 (unicos), k<=2 y k<=5.
+    Reporta la fraccion de registros sintéticos con k=1 (unicos), k<=2 y k<=5.
     Criterios de aceptacion a priori: k1<5%, k2<10%, k5<20%.
     """
     logger.info("K-anonimidad sobre cuasi-identificadores...")
 
-    # Discretizar AGE en bins de 5 anos para definir el cuasi-identificador de edad
-    # Funcion auxiliar: convierte una edad continua al limite inferior del intervalo de 5 anos.
+    # Discretizar AGE en bins de 5 años para definir el cuasi-identificador de edad
+    # Funcion auxiliar: convierte una edad continua al limite inferior del intervalo de 5 años.
     # El binning reduce la granularidad de la edad, aproximando el concepto de k-anonimidad
     # segun el estandar de anonimizacion de la AEPD para datos clinicos.
     def _age_bin(age: float) -> int:
-        return int(float(age) // AGE_BIN_STEP) * AGE_BIN_STEP  # binning de edad: paso=5 anos
+        return int(float(age) // AGE_BIN_STEP) * AGE_BIN_STEP  # binning de edad: paso=5 años
 
     # Funcion auxiliar: construye la clave de cuasi-identificador de una fila como tupla.
     # Combina edad bineada, sexo y ECOG basal: los tres cuasi-identificadores principales
@@ -629,13 +629,13 @@ def compute_k_anonymity(
 # ---------------------------------------------------------------------------
 
 # Calcula la Distance to Closest Record (DCR) y la Real-to-Real Distance Reference (RRDR)
-# en el espacio de covariables preprocesadas para cuantificar el riesgo de reidentificacion
+# en el espacio de covariables preprocesadas para cuantificar el riesgo de reidentificación
 # mediante proximidad geometrica.
-# DCR: para cada registro sintetico, distancia Euclidea minima al registro real mas cercano.
-#   Un DCR bajo indica que el sintetico es casi identico a algun real, aumentando el riesgo
+# DCR: para cada registro sintético, distancia Euclídea minima al registro real mas cercano.
+#   Un DCR bajo indica que el sintético es casi identico a algun real, aumentando el riesgo
 #   de que revele informacion de ese sujeto especifico.
 # RRDR: para cada registro real, distancia al vecino real mas cercano (leave-one-out).
-#   Sirve como referencia del "ruido natural" del dataset: si DCR >= RRDR, los sinteticos
+#   Sirve como referencia del "ruido natural" del dataset: si DCR >= RRDR, los sintéticos
 #   no estan mas cerca de los reales de lo que los reales lo estan entre si.
 # Criterio a priori: DCR_p5 / RRDR_mediana >= 0.50.
 # Entrada: matrices X_syn y X_real ya preprocesadas (mismo espacio de covariables) y logger.
@@ -646,7 +646,7 @@ def compute_dcr(
     logger: logging.Logger,
 ) -> dict:
     """
-    DCR: para cada registro sintetico, distancia Euclidea minima al real mas cercano.
+    DCR: para cada registro sintético, distancia Euclídea minima al real mas cercano.
     RRDR (Real-to-Real Distance): para cada registro real, distancia al vecino real
     mas cercano (leave-one-out), usada como referencia del "ruido natural" del dataset.
 
@@ -654,7 +654,7 @@ def compute_dcr(
     """
     logger.info("Computando DCR y RRDR...")
 
-    # DCR: matriz de distancias sintetico vs real; min por fila = distancia al vecino mas cercano
+    # DCR: matriz de distancias sintético vs real; min por fila = distancia al vecino mas cercano
     dist_sr  = cdist(X_syn, X_real, metric="euclidean")   # (n_syn, n_real)
     dcr      = dist_sr.min(axis=1)
 
@@ -692,16 +692,16 @@ def compute_dcr(
 # ---------------------------------------------------------------------------
 
 # Genera el grafico de barras comparativo TRTR vs TSTR con barras de error (desviacion tipica).
-# Visualiza la utilidad del dataset sintetico: si la barra TSTR es cercana a TRTR, los
-# sinteticos son informativos para el modelo de supervivencia. El ratio TSTR/TRTR se muestra
+# Visualiza la utilidad del dataset sintético: si la barra TSTR es cercana a TRTR, los
+# sintéticos son informativos para el modelo de supervivencia. El ratio TSTR/TRTR se muestra
 # como anotacion en el grafico para cuantificar la perdida de utilidad.
-# El pie de advertencia DISCLAIMER recuerda el uso exclusivamente metodologico de los sinteticos.
+# El pie de advertencia DISCLAIMER recuerda el uso exclusivamente metodologico de los sintéticos.
 # Entrada: diccionario de metricas TSTR, ruta de salida y logger. Sin retorno (guarda PNG).
 def _plot_tstr(tstr: dict, path: Path, logger: logging.Logger) -> None:
     _setup_rcparams()
     fig, ax = plt.subplots(figsize=(7, 4.5))
 
-    labels = ["TRTR\n(referencia real)", "TSTR\n(sintetico -> real)"]
+    labels = ["TRTR\n(referencia real)", "TSTR\n(sintético -> real)"]
     means  = [tstr["trtr_mean"], tstr["tstr_mean"]]
     stds   = [tstr["trtr_std"],  tstr["tstr_std"]]
     colors = [C_DARK, C_AMBER]
@@ -789,12 +789,12 @@ def _plot_membership(mi: dict, path: Path, logger: logging.Logger) -> None:
     logger.info("Guardado: %s", path.name)
 
 
-# Genera histogramas superpuestos de DCR (sintetico vs real) y RRDR (real vs real LOO).
-# Permite comparar visualmente si los sinteticos mantienen una distancia suficiente respecto
+# Genera histogramas superpuestos de DCR (sintético vs real) y RRDR (real vs real LOO).
+# Permite comparar visualmente si los sintéticos mantienen una distancia suficiente respecto
 # a los reales (DCR >> 0) o si estan concentrados cerca de registros reales concretos.
 # La linea vertical en DCR_p5 y la anotacion del ratio facilitan la auditoria de privacidad.
-# Un solapamiento significativo entre DCR y RRDR indica que los sinteticos son indistinguibles
-# de los reales en el espacio de covariables, lo que supone un riesgo de reidentificacion.
+# Un solapamiento significativo entre DCR y RRDR indica que los sintéticos son indistinguibles
+# de los reales en el espacio de covariables, lo que supone un riesgo de reidentificación.
 # Entrada: diccionario DCR, ruta de salida y logger. Sin retorno (guarda PNG).
 def _plot_dcr(dcr: dict, path: Path, logger: logging.Logger) -> None:
     _setup_rcparams()
@@ -804,17 +804,17 @@ def _plot_dcr(dcr: dict, path: Path, logger: logging.Logger) -> None:
     r_raw = np.array(dcr["_rrdr_raw"])
     bins  = np.histogram_bin_edges(np.concatenate([d_raw, r_raw]), bins=40)
 
-    ax.hist(d_raw, bins=bins, color=C_AMBER, alpha=0.65, label="DCR (sintetico vs real)")
+    ax.hist(d_raw, bins=bins, color=C_AMBER, alpha=0.65, label="DCR (sintético vs real)")
     ax.hist(r_raw, bins=bins, color=C_DARK,  alpha=0.50, label="RRDR (real vs real, LOO)")
 
     p5 = dcr["dcr_synthetic"]["p5"]
     ax.axvline(p5, color=C_AMBER, ls="--", lw=2.0, label=f"DCR p5 = {p5:.3f}")
 
     ratio = dcr["dcr_p5_rrdr_median_ratio"]
-    ax.set_xlabel("Distancia Euclidea (espacio preprocesado)")
+    ax.set_xlabel("Distancia Euclídea (espacio preprocesado)")
     ax.set_ylabel("Frecuencia")
     ax.set_title(
-        "DCR y RRDR - mayor DCR implica menor riesgo de reidentificacion",
+        "DCR y RRDR - mayor DCR implica menor riesgo de reidentificación",
         color=C_DARK, fontweight="bold",
     )
     ax.legend()
@@ -830,10 +830,10 @@ def _plot_dcr(dcr: dict, path: Path, logger: logging.Logger) -> None:
     logger.info("Guardado: %s", path.name)
 
 
-# Genera el grafico de barras de k-anonimidad: porcentaje de registros sinteticos por nivel k.
+# Genera el grafico de barras de k-anonimidad: porcentaje de registros sintéticos por nivel k.
 # Cada barra incluye una linea roja discontinua que marca el umbral de aceptacion a priori.
-# Los cuasi-identificadores usados son AGE (intervalos de 5 anos), SEXCD y B_ECOGN.
-# La barra "k=0 (sin match)" indica sinteticos sin ningun registro real con los mismos
+# Los cuasi-identificadores usados son AGE (intervalos de 5 años), SEXCD y B_ECOGN.
+# La barra "k=0 (sin match)" indica sintéticos sin ningun registro real con los mismos
 # cuasi-identificadores, lo que en principio es favorable para la privacidad pero puede
 # indicar distribucion fuera del dominio clinico observado.
 # Entrada: diccionario de k-anonimidad, ruta de salida y logger. Sin retorno (guarda PNG).
@@ -876,10 +876,10 @@ def _plot_kanon(kanon: dict, path: Path, logger: logging.Logger) -> None:
             ax.axhline(thr, xmin=x_lo, xmax=x_hi,
                        color="red", ls="--", lw=1.8, alpha=0.85)
 
-    ax.set_ylabel("Porcentaje de registros sinteticos (%)")
+    ax.set_ylabel("Porcentaje de registros sintéticos (%)")
     ax.set_title(
-        f"K-anonimidad de registros sinteticos (n={n_syn})\n"
-        "QI: AGE (intervalos de 5 anos), SEXCD, B_ECOGN",
+        f"K-anonimidad de registros sintéticos (n={n_syn})\n"
+        "QI: AGE (intervalos de 5 años), SEXCD, B_ECOGN",
         color=C_DARK, fontweight="bold",
     )
     ax.set_ylim(0, max(values_bar + [ACCEPT["kanon_k5_max"] * 100]) + 8)
@@ -896,17 +896,17 @@ def _plot_kanon(kanon: dict, path: Path, logger: logging.Logger) -> None:
 # Main
 # ---------------------------------------------------------------------------
 
-# Punto de entrada principal del componente de datos sinteticos.
+# Punto de entrada principal del componente de datos sintéticos.
 # Orquesta el pipeline completo en 7 etapas secuenciales:
-#   1. Generacion de N_SYNTHETIC registros sinteticos con CTGAN.
-#   2. Evaluacion de utilidad TSTR (Train on Synthetic, Test on Real) con Cox PH y CV k=5.
-#   3. Evaluacion del riesgo de membership inference con N_SHADOW shadow models de CTGAN.
+#   1. Generacion de N_SYNTHETIC registros sintéticos con CTGAN.
+#   2. Evaluación de utilidad TSTR (Train on Synthetic, Test on Real) con Cox PH y CV k=5.
+#   3. Evaluación del riesgo de membership inference con N_SHADOW shadow models de CTGAN.
 #   4. Computo de k-anonimidad sobre cuasi-identificadores (AGE_bin, SEXCD, B_ECOGN).
 #   5. Computo de DCR y RRDR en el espacio de covariables preprocesadas.
 #   6. Generacion de las cuatro figuras de reporte (TSTR, membership, DCR, k-anonimidad).
 #   7. Serializacion de todas las metricas en synthetic_metrics.json.
 # Retorna 0 si la ejecucion es exitosa, 1 si falta alguna dependencia o el dataset de entrada.
-# Advertencia: los datos sinteticos generados son exclusivamente para prototipado metodologico.
+# Advertencia: los datos sintéticos generados son exclusivamente para prototipado metodologico.
 def main() -> int:
     logger = _setup_logger()
     _set_global_seeds(SEED)
@@ -929,20 +929,20 @@ def main() -> int:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     # -------------------------------------------------------------------
-    # 1. Generacion de datos sinteticos
+    # 1. Generacion de datos sintéticos
     # -------------------------------------------------------------------
     logger.info("\n=== 1. GENERACION DE DATOS SINTETICOS ===")
     df_syn = generate_synthetic(df_real, logger)
     syn_path = OUTPUT_DIR / "synthetic_dataset.csv"
     df_syn.to_csv(syn_path, index=False)
     logger.info(
-        "Dataset sintetico guardado: %s (%d filas). "
+        "Dataset sintético guardado: %s (%d filas). "
         "Excluido del control de versiones por output/.",
         syn_path.name, len(df_syn),
     )
 
     # -------------------------------------------------------------------
-    # 2. Evaluacion TSTR
+    # 2. Evaluación TSTR
     # -------------------------------------------------------------------
     logger.info("\n=== 2. EVALUACION TSTR ===")
     tstr = evaluate_tstr(df_real, df_syn, logger)

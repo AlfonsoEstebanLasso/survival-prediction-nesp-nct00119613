@@ -2,7 +2,7 @@
 src/evaluation/eval_cox_final.py
 
 Proposito:
-    Evaluacion completa del modelo final (Cox PH) sobre OS y PFS mediante
+    Evaluación completa del modelo final (Cox PH) sobre OS y PFS mediante
     predicciones OOF (out-of-fold) del esquema CV k=5.
 
 Entradas:
@@ -10,9 +10,9 @@ Entradas:
 
 Salidas (en output/):
     Figuras (PNG 300 dpi):
-        fig_calibration_{EP}.png   Calibracion en 3 tiempos de referencia
+        fig_calibration_{EP}.png   Calibración en 3 tiempos de referencia
         fig_brier_time_{EP}.png    Brier Score a lo largo del tiempo con bandas bootstrap
-        fig_auc_time_{EP}.png      AUC dinamica acumulada con bandas bootstrap
+        fig_auc_time_{EP}.png      AUC dinámica acumulada con bandas bootstrap
         fig_evaluation_{EP}.png    Panel 1x3 combinado por endpoint
 
     Tablas (CSV):
@@ -23,7 +23,7 @@ Salidas (en output/):
 Metodologia:
     - Las predicciones OOF se generan refitando el Cox (sin hiperparametros que optimizar)
       con el mismo esquema CV k=5 estratificado que cox_baseline.py.
-    - Calibracion: 10 grupos de decil por probabilidad predicha; S observada = KM en el grupo.
+    - Calibración: 10 grupos de decil por probabilidad predicha; S observada = KM en el grupo.
       Bandas de error = IC95% KM (formula log-log de lifelines).
     - Brier Score: brier_score() de sksurv en rejilla de 50 tiempos; bootstrap n=1000.
     - AUC: cumulative_dynamic_auc() de sksurv; bootstrap n=1000.
@@ -67,9 +67,9 @@ warnings.filterwarnings("ignore")
 
 FEATURES    = NUMERIC_FEATURES + CATEGORICAL_FEATURES
 N_TIME_EVAL = 50       # puntos en la rejilla de evaluacion (mas fina que la de entrenamiento)
-N_CAL_GROUPS = 10      # deciles de calibracion
+N_CAL_GROUPS = 10      # deciles de calibración
 N_BOOT      = 1000     # bootstrap para Brier y AUC
-N_BOOT_CAL  = 500      # bootstrap para calibracion (mas caro por KM interna)
+N_BOOT_CAL  = 500      # bootstrap para calibración (mas caro por KM interna)
 ENDPOINTS   = {
     "OS":  {"event": "DTH",   "time": "DTHDY",  "label": "OS (tiempo hasta muerte)"},
     "PFS": {"event": "PFSCD", "time": "PFSDY",  "label": "SLP (supervivencia libre de progresion)"},
@@ -191,7 +191,7 @@ def collect_oof(df: pd.DataFrame, event_col: str, time_col: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Calibracion
+# Calibración
 # ---------------------------------------------------------------------------
 
 # Estima la probabilidad de supervivencia observada (Kaplan-Meier) y su IC95% log-log
@@ -232,12 +232,12 @@ def _km_at_t(event_arr: np.ndarray, time_arr: np.ndarray,
     return s, lo, hi
 
 
-# Calcula la calibracion del modelo Cox comparando la supervivencia predicha (OOF)
+# Calcula la calibración del modelo Cox comparando la supervivencia predicha (OOF)
 # con la supervivencia observada (Kaplan-Meier) en cada decil de riesgo.
 # Entradas: vector de S predicha en t_ref para todos los sujetos, y estructurado,
 # array de tiempos de referencia y numero de grupos. Salida: DataFrame con columnas
 # mean_pred (media de S predicha por decil), km_obs, km_ci_lo, km_ci_hi y metadatos.
-# Justificacion: la calibracion por deciles es el estandar en modelos de supervivencia
+# Justificacion: la calibración por deciles es el estandar en modelos de supervivencia
 # (TRIPOD); un buen modelo produce puntos cercanos a la diagonal S_predicha = S_KM.
 # Nota oncologica: en horizontes temporales largos el estimador KM puede subestimar
 # la supervivencia real en el grupo de alto riesgo por el pequeno numero en riesgo;
@@ -252,7 +252,7 @@ def compute_calibration(
     Para cada tiempo de referencia:
       - Divide los sujetos en n_groups deciles por S predicha OOF.
       - Calcula la media de S predicha y la KM observada con IC95% en cada decil.
-    La calibracion es correcta cuando los puntos caen sobre la diagonal.
+    La calibración es correcta cuando los puntos caen sobre la diagonal.
     """
     # Aseguramos arrays numpy sin indices pandas
     s_pred = np.asarray(s_pred_col, dtype=float)
@@ -293,11 +293,11 @@ def compute_calibration(
     return pd.DataFrame(rows)
 
 
-# Genera los subplots de calibracion para los tres tiempos de referencia (p25, p50, p75).
-# Entradas: DataFrame de calibracion, array de tiempos de referencia en dias, etiqueta
+# Genera los subplots de calibración para los tres tiempos de referencia (p25, p50, p75).
+# Entradas: DataFrame de calibración, array de tiempos de referencia en días, etiqueta
 # del endpoint y lista de tres ejes matplotlib. No devuelve nada (efecto lateral: rellena los ejes).
 # Cada eje muestra los deciles como puntos con barras de error IC95% KM frente a la diagonal
-# de calibracion perfecta (S_pred = S_KM).
+# de calibración perfecta (S_pred = S_KM).
 def _plot_calibration(
     calib_df: pd.DataFrame,
     ref_times: np.ndarray,
@@ -305,7 +305,7 @@ def _plot_calibration(
     ax_list: list,
 ) -> None:
     colors     = [C_DARK, C_AMBER, C_GREEN]
-    ref_labels = [f"t = {int(round(t))} dias" for t in ref_times]
+    ref_labels = [f"t = {int(round(t))} días" for t in ref_times]
 
     for ax, t_ref, color, lbl in zip(ax_list, ref_times, colors, ref_labels):
         # Comparacion aproximada de floats para seleccionar filas del CSV
@@ -327,9 +327,9 @@ def _plot_calibration(
             fmt="o", color=color, ms=7, lw=1.8, capsize=5,
             elinewidth=1.4, label=f"Deciles ({lbl})", zorder=3,
         )
-        # Diagonal de calibracion perfecta
+        # Diagonal de calibración perfecta
         ax.plot([0, 1], [0, 1], "--", color="#999999", lw=1.2,
-                label="Calibracion perfecta", zorder=2)
+                label="Calibración perfecta", zorder=2)
 
         # Ajustar limites al rango de los datos con margen
         margin = 0.05
@@ -357,7 +357,7 @@ def _plot_calibration(
 # Entradas: y estructurado, matriz de supervivencia OOF en safe_times, rejilla de tiempos
 # segura, numero de replicas bootstrap y semilla. Salida: DataFrame con columnas time,
 # brier (Cox OOF), brier_null (modelo nulo KM marginal), ci_lo y ci_hi.
-# Justificacion: el Brier Score es una metrica de calibracion global que cuantifica
+# Justificacion: el Brier Score es una metrica de calibración global que cuantifica
 # el error cuadratico medio entre la supervivencia predicha y el estado observado a
 # cada tiempo t; el modelo nulo KM sirve de referencia sin covariables (skill score).
 # Las bandas bootstrap (percentiles 2.5 y 97.5 de n=1000 remuestras con reemplazamiento)
@@ -445,7 +445,7 @@ def _plot_brier(
     ax.fill_between(t, lo, hi, color=C_LIGHT, alpha=0.8, label="IC95% bootstrap")
     ax.plot(t, b, color=C_DARK, lw=2, label="Cox PH (OOF)")
     ax.plot(t, bn, "--", color=C_GRAY, lw=1.2, label="Modelo nulo (KM marginal)")
-    ax.set_xlabel("Tiempo (dias)")
+    ax.set_xlabel("Tiempo (días)")
     ax.set_ylabel("Brier Score B(t)")
     ax.set_title(f"Brier Score en el tiempo\n{ep_label}", color=C_DARK, fontweight="bold")
     ax.legend()
@@ -453,14 +453,14 @@ def _plot_brier(
 
 
 # ---------------------------------------------------------------------------
-# AUC dinamica acumulada
+# AUC dinámica acumulada
 # ---------------------------------------------------------------------------
 
-# Calcula la AUC dinamica acumulada a lo largo del tiempo con IC95% bootstrap (n=1000).
+# Calcula la AUC dinámica acumulada a lo largo del tiempo con IC95% bootstrap (n=1000).
 # Entradas: y estructurado, vector de risk scores OOF (log-hazard del Cox), rejilla
 # de tiempos segura, numero de replicas y semilla. Salida: DataFrame con columnas
 # time, auc, ci_lo, ci_hi, mean_auc, mean_ci_lo, mean_ci_hi.
-# Justificacion: la AUC acumulada/dinamica (Uno et al. 2007) mide la capacidad
+# Justificacion: la AUC acumulada/dinámica (Uno et al. 2007) mide la capacidad
 # discriminativa del modelo a cada horizonte temporal, superando el C-index estatico
 # al capturar cambios de discriminacion a lo largo del seguimiento. En oncologia,
 # la AUC a tiempos largos puede decaer por el pequeno numero de sujetos en riesgo
@@ -475,7 +475,7 @@ def compute_auc_curve(
     seed: int = SEED,
 ) -> pd.DataFrame:
     """
-    AUC(t) acumulada/dinamica con IC95% bootstrap.
+    AUC(t) acumulada/dinámica con IC95% bootstrap.
     Usa el dataset completo como referencia IPCW (aproximacion estandar para OOF).
     """
     # Restriccion: tiempos dentro del rango de eventos
@@ -516,7 +516,7 @@ def compute_auc_curve(
     })
 
 
-# Dibuja la curva AUC(t) acumulada/dinamica con bandas IC95% bootstrap y referencia aleatoria.
+# Dibuja la curva AUC(t) acumulada/dinámica con bandas IC95% bootstrap y referencia aleatoria.
 # Entradas: DataFrame de AUC, etiqueta del endpoint y eje matplotlib.
 # No devuelve nada (efecto lateral: rellena el eje). Anota la AUC media integrada con su IC95%.
 def _plot_auc(
@@ -536,13 +536,13 @@ def _plot_auc(
     mhi = float(auc_df["mean_ci_hi"].iloc[0])
 
     ax.fill_between(t, lo, hi, color=C_LIGHT, alpha=0.8, label="IC95% bootstrap")
-    ax.plot(t, a, color=C_DARK, lw=2, label="AUC acumulada/dinamica")
+    ax.plot(t, a, color=C_DARK, lw=2, label="AUC acumulada/dinámica")
     ax.axhline(0.5, color=C_GRAY, ls="--", lw=1.2, label="Referencia aleatoria (0.5)")
-    ax.set_xlabel("Tiempo (dias)")
+    ax.set_xlabel("Tiempo (días)")
     ax.set_ylabel("AUC(t)")
     ax.set_ylim(0.3, 1.0)
     ax.set_title(
-        f"AUC dinamica acumulada\n{ep_label}",
+        f"AUC dinámica acumulada\n{ep_label}",
         color=C_DARK, fontweight="bold",
     )
     ax.legend()
@@ -556,11 +556,11 @@ def _plot_auc(
 
 
 # ---------------------------------------------------------------------------
-# Evaluacion completa por endpoint
+# Evaluación completa por endpoint
 # ---------------------------------------------------------------------------
 
 # Orquesta la evaluacion completa de un endpoint (OS o PFS):
-# recolecta predicciones OOF, calcula calibracion, Brier Score y AUC dinamica,
+# recolecta predicciones OOF, calcula calibración, Brier Score y AUC dinámica,
 # guarda tablas CSV y genera cuatro figuras PNG en output/.
 # Entradas: df con todos los sujetos, nombre del endpoint, columnas de evento y tiempo,
 # etiqueta legible y logger. No devuelve nada (salidas en disco).
@@ -575,7 +575,7 @@ def run_endpoint_eval(
     ep_label: str,
     logger: logging.Logger,
 ) -> None:
-    logger.info("=== Evaluacion | Endpoint %s ===", ep_name)
+    logger.info("=== Evaluación | Endpoint %s ===", ep_name)
 
     # OOF
     logger.info("  Recogiendo predicciones OOF (CV k=5)...")
@@ -586,16 +586,16 @@ def run_endpoint_eval(
     safe_times    = oof["safe_times"]
     global_times  = oof["global_times"]
 
-    # Tiempos de referencia para calibracion: p25, p50, p75 de tiempos de evento (horizontes en dias).
+    # Tiempos de referencia para calibración: p25, p50, p75 de tiempos de evento (horizontes en días).
     ref_times = np.percentile(y["time"][y["event"]], [25, 50, 75])
-    logger.info("  Tiempos de referencia (dias): %s", np.round(ref_times).astype(int))
+    logger.info("  Tiempos de referencia (días): %s", np.round(ref_times).astype(int))
 
     # Indice de safe_times mas cercano a cada ref_time para extraer S(t*)
     ref_time_idxs = [np.argmin(np.abs(safe_times - t)) for t in ref_times]
     ref_times_actual = safe_times[ref_time_idxs]
 
-    # --------------- Calibracion ---------------
-    logger.info("  Calibracion en %d tiempos de referencia...", len(ref_times_actual))
+    # --------------- Calibración ---------------
+    logger.info("  Calibración en %d tiempos de referencia...", len(ref_times_actual))
     calib_rows = []
     for t_ref, t_idx in zip(ref_times_actual, ref_time_idxs):
         s_pred_col = safe_surv[:, t_idx]
@@ -614,7 +614,7 @@ def run_endpoint_eval(
     logger.info("  Guardado: %s", brier_path.name)
 
     # --------------- AUC ---------------
-    logger.info("  AUC dinamica bootstrap (n=%d)...", N_BOOT)
+    logger.info("  AUC dinámica bootstrap (n=%d)...", N_BOOT)
     auc_df = compute_auc_curve(y, oof_risk, safe_times)
     auc_path = OUTPUT_DIR / f"eval_auc_time_{ep_name}.csv"
     auc_df.to_csv(auc_path, index=False)
@@ -622,10 +622,10 @@ def run_endpoint_eval(
 
     _setup_rcparams()
 
-    # --------------- Figura calibracion (1x3) ---------------
+    # --------------- Figura calibración (1x3) ---------------
     fig_cal, axes_cal = plt.subplots(1, 3, figsize=(14, 4.5))
     fig_cal.suptitle(
-        f"Curvas de calibracion - Cox PH - {ep_label}",
+        f"Curvas de calibración - Cox PH - {ep_label}",
         fontsize=13, fontweight="bold", color=C_DARK, y=1.02,
     )
     _plot_calibration(calib_df, ref_times_actual, ep_label, list(axes_cal))
@@ -650,11 +650,11 @@ def run_endpoint_eval(
     # --------------- Panel combinado (1x3) ---------------
     fig_all, axes_all = plt.subplots(1, 3, figsize=(18, 5))
     fig_all.suptitle(
-        f"Evaluacion completa - Cox PH - {ep_label}",
+        f"Evaluación completa - Cox PH - {ep_label}",
         fontsize=13, fontweight="bold", color=C_DARK,
     )
 
-    # Calibracion en el tiempo de referencia central (p50)
+    # Calibración en el tiempo de referencia central (p50)
     mid = calib_df[calib_df["ref_time"] == ref_times_actual[1]].dropna(subset=["km_obs"])
     if not mid.empty:
         ax_c = axes_all[0]
@@ -662,12 +662,12 @@ def run_endpoint_eval(
             mid["mean_pred"], mid["km_obs"],
             yerr=[mid["km_obs"] - mid["km_ci_lo"], mid["km_ci_hi"] - mid["km_obs"]],
             fmt="o", color=C_DARK, ms=6, lw=1.5, capsize=4,
-            label=f"t = {int(ref_times_actual[1])} dias",
+            label=f"t = {int(ref_times_actual[1])} días",
         )
-        ax_c.plot([0, 1], [0, 1], "--", color="#AAAAAA", lw=1, label="Calibracion perfecta")
+        ax_c.plot([0, 1], [0, 1], "--", color="#AAAAAA", lw=1, label="Calibración perfecta")
         ax_c.set_xlim(0, 1); ax_c.set_ylim(0, 1)
         ax_c.set_xlabel("S(t) predicha"); ax_c.set_ylabel("S(t) observada (KM)")
-        ax_c.set_title("Calibracion", color=C_DARK, fontweight="bold")
+        ax_c.set_title("Calibración", color=C_DARK, fontweight="bold")
         ax_c.legend(fontsize=8)
 
     _plot_brier(brier_df, ep_label, axes_all[1])
@@ -731,7 +731,7 @@ def main() -> int:
             df, ep_name, ep_cfg["event"], ep_cfg["time"], ep_cfg["label"], logger,
         )
 
-    logger.info("Evaluacion completa. Artefactos en: %s", OUTPUT_DIR)
+    logger.info("Evaluación completa. Artefactos en: %s", OUTPUT_DIR)
     return 0
 
 

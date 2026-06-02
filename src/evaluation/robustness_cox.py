@@ -2,7 +2,7 @@
 src/evaluation/robustness_cox.py
 
 Proposito:
-    Analisis de robustez del modelo Cox PH final sobre OS (primario) y PFS (secundario).
+    Análisis de robustez del modelo Cox PH final sobre OS (primario) y PFS (secundario).
 
     1. C-index e IBS por subgrupos clinicos disponibles en el dataset derivado:
        brazo (TXG), estado funcional basal (B_ECOGN), carga de comorbilidades (MEDHX_N),
@@ -10,7 +10,7 @@ Proposito:
        Discusion de transferibilidad: si el IC bootstrap de un subgrupo no solapa
        con el global, el modelo se transfiere de forma diferencial.
 
-    2. Analisis de errores por percentil de riesgo predicho OOF:
+    2. Análisis de errores por percentil de riesgo predicho OOF:
        para cada quintil de riesgo se calcula la tasa de evento observada, la
        supervivencia KM media y el riesgo medio predicho, permitiendo detectar
        grupos en los que el modelo calibra peor.
@@ -21,7 +21,7 @@ Entradas:
 Salidas (en output/):
     robustness_subgroups_OS.csv / PFS.csv   Tabla de metricas por subgrupo
     fig_subgroup_cindex.png                 Forest plot de C-index por subgrupo
-    fig_error_by_risk_OS.png / PFS.png      Analisis de errores por quintil de riesgo
+    fig_error_by_risk_OS.png / PFS.png      Análisis de errores por quintil de riesgo
 """
 
 from __future__ import annotations
@@ -70,7 +70,7 @@ ENDPOINTS = {
 
 # Inicializa el logger del modulo con formato de hora, nivel y mensaje.
 # Entrada: ninguna. Salida: objeto Logger configurado con StreamHandler a stdout.
-# Registra el progreso del analisis de robustez en consola sin dependencia de ficheros de log.
+# Registra el progreso del análisis de robustez en consola sin dependencia de ficheros de log.
 def setup_logger() -> logging.Logger:
     logger = logging.getLogger("robustness")
     logger.setLevel(logging.INFO)
@@ -109,7 +109,7 @@ def _save(fig, path, dpi=300):
 # Definicion de subgrupos
 # ---------------------------------------------------------------------------
 
-# Define las mascaras booleanas que identifican cada subgrupo clinico de analisis.
+# Define las mascaras booleanas que identifican cada subgrupo clinico de análisis.
 # Entrada: dataframe derivado completo (n = 479 sujetos).
 # Salida: diccionario {nombre_subgrupo: array booleano de longitud n}.
 # Perspectiva de ciencia de datos: la particion en subgrupos permite evaluar si el modelo
@@ -149,8 +149,8 @@ def build_subgroups(df: pd.DataFrame) -> dict[str, np.ndarray]:
         "Sexo = 0":                             df["SEXCD"].values == 0,
         "Sexo = 1":                             df["SEXCD"].values == 1,
         # Edad respecto a la mediana
-        f"Edad < {int(age_med)} anos":           df["AGE"].values < age_med,
-        f"Edad >= {int(age_med)} anos":          df["AGE"].values >= age_med,
+        f"Edad < {int(age_med)} años":           df["AGE"].values < age_med,
+        f"Edad >= {int(age_med)} años":          df["AGE"].values >= age_med,
         # Tiempo desde diagnostico (proxy de linea de tratamiento)
         f"Tiempo desde diag. < mediana ({cadiagm_med:.2f} m)":
             cadiagm_imp < cadiagm_med,
@@ -219,7 +219,7 @@ def subgroup_cindex(
 # Calcula el Integrated Brier Score (IBS) para un subgrupo definido por una mascara booleana.
 # Entrada: array structured y completo, predicciones de supervivencia OOF, tiempos evaluados y mascara.
 # Salida: IBS del subgrupo (float); NaN si el subgrupo no es evaluable (menos de 5 eventos).
-# Perspectiva de ciencia de datos: el IBS mide la calibracion-discriminacion conjunta integrada
+# Perspectiva de ciencia de datos: el IBS mide la calibración-discriminacion conjunta integrada
 # en el tiempo (0 = perfecto, 0.25 = modelo nulo). Se pasa y_all completo como referencia de
 # censura para la estimacion IPCW (inverse probability of censoring weighting): esto garantiza
 # que la correccion por censura sea consistente con la distribucion global, aunque el calculo
@@ -248,7 +248,7 @@ def subgroup_ibs(
 # Construye la tabla consolidada de metricas de rendimiento por subgrupo para un endpoint.
 # Entrada: dataframe, array y, predicciones OOF de riesgo y supervivencia, tiempos, nombre del endpoint y logger.
 # Salida: DataFrame con columnas Subgrupo, n, n_eventos, C-index, IC95% y IBS.
-# Perspectiva de ciencia de datos: esta tabla es el instrumento central del analisis de robustez.
+# Perspectiva de ciencia de datos: esta tabla es el instrumento central del análisis de robustez.
 # Permite comparar el rendimiento del modelo global frente a cada subgrupo clinico y detectar
 # grupos en los que el modelo discrimina peor o calibra de forma diferencial. La columna IBS
 # complementa el C-index: un modelo puede discriminar bien (alto C-index) pero calibrar mal
@@ -354,10 +354,10 @@ def plot_forest_subgroups(
 
 
 # ---------------------------------------------------------------------------
-# Analisis de errores por quintil de riesgo
+# Análisis de errores por quintil de riesgo
 # ---------------------------------------------------------------------------
 
-# Genera el analisis de errores por percentil de riesgo predicho OOF (quintiles por defecto).
+# Genera el análisis de errores por percentil de riesgo predicho OOF (quintiles por defecto).
 # Entrada: dataframe, array y, riesgo OOF, supervivencias OOF, tiempos seguros, nombre y etiqueta del endpoint.
 # Salida: tupla (Figure con 2 paneles, DataFrame de estadisticas por quintil).
 # Perspectiva de ciencia de datos: la clasificacion en quintiles de riesgo predicho permite
@@ -365,7 +365,7 @@ def plot_forest_subgroups(
 # Panel 1 (discriminacion): la tasa de evento observada debe crecer monotonamente del quintil 1
 # al 5 si el modelo ordena correctamente a los sujetos por riesgo. Desviaciones de la monotonia
 # indican grupos donde el modelo falla en la ordenacion relativa.
-# Panel 2 (calibracion): se compara la supervivencia media predicha OOF frente a la supervivencia
+# Panel 2 (calibración): se compara la supervivencia media predicha OOF frente a la supervivencia
 # observada por Kaplan-Meier en un tiempo de referencia (mediana de los tiempos de evento).
 # Una brecha sistematica entre la curva predicha y la KM en alguno de los quintiles indica
 # miscalibracion localizada, que no queda capturada por el IBS global.
@@ -405,7 +405,7 @@ def plot_error_by_risk(
         # Tasa de evento observada: proporcion de sujetos con evento en el quintil (discriminacion)
         event_rate = float(ev_q.mean())
 
-        # Supervivencia observada KM en t_ref: estimador no parametrico de referencia para calibracion
+        # Supervivencia observada KM en t_ref: estimador no parametrico de referencia para calibración
         kmf = KaplanMeierFitter()
         kmf.fit(ti_q, event_observed=ev_q.astype(bool))
         km_at_t = float(kmf.survival_function_at_times([t_ref]).iloc[0])
@@ -429,7 +429,7 @@ def plot_error_by_risk(
     # Figura: 2 paneles
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
     fig.suptitle(
-        f"Analisis de errores por quintil de riesgo - Cox PH - {ep_label}",
+        f"Análisis de errores por quintil de riesgo - Cox PH - {ep_label}",
         fontsize=12, fontweight="bold", color=C_DARK,
     )
 
@@ -440,8 +440,8 @@ def plot_error_by_risk(
     ax.axhline(y["event"].mean(), color=C_AMBER, ls="--", lw=1.5,
                label=f"Tasa global ({y['event'].mean():.2f})")
     ax.set_xlabel("Quintil de riesgo predicho (1 = menor riesgo)")
-    ax.set_ylabel("Proporcion de eventos observados")
-    ax.set_title("Discriminacion por quintil de riesgo")
+    ax.set_ylabel("Proporción de eventos observados")
+    ax.set_title("Discriminación por quintil de riesgo")
     ax.set_xticks(tbl["quintil"])
     for _, row in tbl.iterrows():
         ax.text(row["quintil"], row["event_rate_obs"] + 0.005,
@@ -460,7 +460,7 @@ def plot_error_by_risk(
     ax2.plot(tbl["quintil"], tbl["km_surv_obs"],   color=C_AMBER, lw=1.2, alpha=0.6)
     ax2.set_xlabel("Quintil de riesgo predicho (1 = menor riesgo)")
     ax2.set_ylabel("Probabilidad de supervivencia")
-    ax2.set_title(f"Calibracion por quintil de riesgo (t = {int(t_ref)} dias)")
+    ax2.set_title(f"Calibración por quintil de riesgo (t = {int(t_ref)} días)")
     ax2.set_xticks(tbl["quintil"])
     ax2.legend()
     ax2.set_ylim(0, 1)
@@ -473,11 +473,11 @@ def plot_error_by_risk(
 # Main
 # ---------------------------------------------------------------------------
 
-# Orquesta el pipeline completo de analisis de robustez del modelo Cox PH.
+# Orquesta el pipeline completo de análisis de robustez del modelo Cox PH.
 # Entrada: dataset CSV en output/. Salida: tablas CSV y figuras PNG en output/.
 # Perspectiva de ciencia de datos: recupera las predicciones OOF generadas durante la
 # validacion cruzada (collect_oof), calcula el rendimiento por subgrupo con bootstrap
-# y genera el analisis de errores por quintil de riesgo para OS y PFS.
+# y genera el análisis de errores por quintil de riesgo para OS y PFS.
 # La separacion entre el modulo de evaluacion global (eval_cox_final) y este modulo de
 # robustez es deliberada: permite reutilizar las predicciones OOF sin reentrenar el modelo,
 # garantizando coherencia con las metricas reportadas en la memoria.
@@ -517,7 +517,7 @@ def main() -> int:
         logger.info("  Guardado: %s", sg_path.name)
         sg_tables[ep_name] = sg_df
 
-        # Analisis de errores por quintil
+        # Análisis de errores por quintil
         fig_err, tbl_err = plot_error_by_risk(
             df, y_all, oof_risk, safe_surv, safe_times, ep_name, ep_label)
         err_fig_path = OUTPUT_DIR / f"fig_error_by_risk_{ep_name}.png"
@@ -531,7 +531,7 @@ def main() -> int:
     forest_path = OUTPUT_DIR / "fig_subgroup_cindex.png"
     _save(fig_forest, forest_path)
     logger.info("Guardado: %s", forest_path.name)
-    logger.info("Analisis de robustez completo.")
+    logger.info("Análisis de robustez completo.")
     return 0
 
 

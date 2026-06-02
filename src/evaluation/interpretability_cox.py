@@ -9,7 +9,7 @@ Proposito:
        usan estandarizacion interna, pero se reportan en escala natural para interpretacion
        clinica). CADIAGM y B_HGB con imputacion por mediana de los 4 valores faltantes.
 
-    2. Forest plot de HRs con escala logaritmica y referencia en HR = 1.
+    2. Forest plot de HRs con escala logarítmica y referencia en HR = 1.
 
     3. Test de proporcionalidad de riesgos de Schoenfeld (estadistico rho, p-valor global
        y por variable). Si p < 0.05 se documenta la desviacion del supuesto PH.
@@ -82,7 +82,7 @@ DISPLAY_NAMES = {
 
 # Inicializa el logger del modulo con formato de hora, nivel y mensaje.
 # Entrada: ninguna. Salida: objeto Logger configurado con StreamHandler a stdout.
-# Permite registrar el progreso del analisis de interpretabilidad en consola.
+# Permite registrar el progreso del análisis de interpretabilidad en consola.
 def setup_logger() -> logging.Logger:
     logger = logging.getLogger("interpretability")
     logger.setLevel(logging.INFO)
@@ -217,8 +217,8 @@ def build_hr_table(cph: CoxPHFitter, ep_name: str) -> pd.DataFrame:
 # Genera el forest plot de Hazard Ratios para todos los endpoints en un unico grafico.
 # Entrada: diccionario {nombre_endpoint: DataFrame de HR} con OS y PFS.
 # Salida: objeto Figure de matplotlib con un panel unico y dos series de puntos/IC.
-# Perspectiva de ciencia de datos: el forest plot en escala logaritmica es el estandar
-# para comunicar HR con IC95% en analisis de supervivencia multivariante. La escala log
+# Perspectiva de ciencia de datos: el forest plot en escala logarítmica es el estandar
+# para comunicar HR con IC95% en análisis de supervivencia multivariante. La escala log
 # simetriza la representacion de efectos protectores (HR < 1) y de riesgo (HR > 1) respecto
 # a la linea de referencia HR = 1 (ausencia de asociacion). El desplazamiento vertical (offset)
 # entre OS y PFS permite comparar ambos endpoints sin solapamiento de puntos. Las estrellas
@@ -271,7 +271,7 @@ def plot_forest_hr(
     ax.set_yticks(y_pos)
     ax.set_yticklabels(vars_ordered, fontsize=9)
     ax.invert_yaxis()
-    ax.set_xlabel("Hazard Ratio (escala logaritmica)")
+    ax.set_xlabel("Hazard Ratio (escala logarítmica)")
     ax.legend(loc="lower right")
     fig.tight_layout()
     return fig
@@ -374,7 +374,7 @@ def plot_schoenfeld(
 
         dname = DISPLAY_NAMES.get(var, var)
         ax.set_title(dname, fontsize=9, color=C_DARK)
-        ax.set_xlabel("Tiempo (dias)", fontsize=8)
+        ax.set_xlabel("Tiempo (días)", fontsize=8)
         ax.set_ylabel("Residuo Schoenfeld", fontsize=8)
 
     # Ocultar subplots vacios
