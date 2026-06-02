@@ -361,3 +361,113 @@ microcítico en estadio extenso, no tratado previamente, con platino y etopósid
 Card; se aclara el matiz del tamaño muestral (600 planificado frente a 479 disponibles); y se
 reformula la justificación de las exclusiones de TUMORCD, EXTENTCD y CHDCLASS como invariantes por
 los criterios de inclusión del protocolo (RACECD permanece como varianza cero observada).
+
+### Pre-registro del protocolo de la Estrategia 2 (análisis ampliado con validación cruzada anidada)
+
+**Fecha:** 2026-06-02. **Naturaleza:** este protocolo se pre-registra por escrito ANTES de ejecutar
+ningún modelado, conforme a la buena práctica de fijar las decisiones de selección de características,
+espacio de búsqueda y criterio de comparación antes de observar resultados. La Estrategia 2 es un
+análisis EXPLORATORIO y ADICIONAL: no sustituye al pipeline primario (Estrategia 1), que permanece
+intacto con sus artefactos, sus hashes y su KPI-1. La Estrategia 2 usa su PROPIO dataset derivado
+(output/dataset_strategy2.parquet, más csv, diccionario y manifiesto con su SHA-256 de referencia),
+en paralelo y sin tocar nada del primario.
+
+**Objetivo:** evaluar si una selección de características embebida y un ajuste bayesiano de
+hiperparámetros, ambos confinados a un bucle interno de validación cruzada anidada, mejoran el
+rendimiento pronóstico sobre el baseline de 7 variables de la Estrategia 1, sin sesgo de selección.
+
+#### Pool de variables candidatas (10), todas basales o pre-aleatorización, sin fuga
+
+Fuentes verificadas en el diccionario de variables (DDT v2) y en el protocolo (Amendment 2,
+2004-07-16). Todas las candidatas están resumidas a nivel de sujeto, antes del tratamiento, en
+c_keyvar, c_bchar y c_diag. NO se usan los ficheros de laboratorio longitudinales (a_lab, c_chem,
+c_hemat, c_iron) por ser post-basales y suponer riesgo de fuga; el LDH y el EPO basales ya están
+resumidos como variables de cribado en c_keyvar.
+
+- Continuas: AGE, BMI (derivada), CADIAGM, B_HGB, B_SEREPO (con log1p), MEDHX_N.
+- Categóricas o binarias: SEXCD, B_ECOGN, B_LDHN, PRTFN.
+
+Variables nuevas frente a los 7 de la Estrategia 1 y su justificación pronóstica:
+- B_SEREPO (EPO sérica basal, mU/mL): relacionada con la anemia y la respuesta eritropoyética.
+  Muy asimétrica (mediana 23.9, máximo 1242) y con 9.2% de faltantes, por lo que se transforma con
+  log1p y se imputa por mediana dentro de fold (9.2% <= 20%).
+- B_LDHN (LDH basal normal frente a anormal): factor de estratificación de la aleatorización segun
+  el protocolo y marcador pronóstico reconocido en cáncer de pulmón microcítico. Binaria limpia
+  (valores 1 y 2), sin faltantes.
+- PRTFN (transfusión de hematíes antes de la primera dosis): marcador de carga de enfermedad basal.
+
+**Tratamiento de PRTFN (ajuste pre-registro).** El DDT decodifica PRTFN con el formato genérico
+compartido YESNOF (0=No, 1=Sí, 7=No aplicable, 8=Desconocido, 9=No realizado), que es texto
+repetitivo del formato, no semántica propia de la variable. La comprobación agregada (solo recuentos,
+sin filas) muestra que PRTFN solo toma 0 (473 sujetos) y 1 (6 sujetos), sin ningún 7/8/9 y sin
+faltantes. Por tanto no procede mapear "No realizado" a "no" ni a faltante: PRTFN es un binario
+sustantivo 0/1 ya limpio. Se documenta de forma explícita que su prevalencia de positivos es muy
+baja (6 de 479, 1.3%), casi constante, por lo que es previsiblemente poco informativa y potencialmente
+inestable entre folds. Se mantiene en el pool por interés clínico y se deja que la selección embebida
+decida; cualquier inestabilidad se reportará con honestidad.
+
+**Derivación del IMC (ajuste pre-registro).** Se sustituyen B_WEIGHT y B_HEIGHT por una única
+covariable derivada BMI = B_WEIGHT / (B_HEIGHT/100)^2. Se opta por dejar SOLO el IMC (y no IMC más
+peso) porque el IMC es el marcador nutricional pronóstico relevante en oncología (caquexia), mientras
+que el peso aislado confunde el tamaño corporal con el estado nutricional; mantener ambos introduciría
+colinealidad fuerte (el IMC ya contiene el peso) que gastaría presupuesto de penalización en el
+elastic-net y desestabilizaría las importancias de RSF y XGBoost. El IMC derivado tiene 1 faltante
+(0.2%) y rango plausible (15.6 a 47.0, mediana 24.6), imputado por mediana dentro de fold.
+
+Exclusiones (documentadas): RACECD, TUMORCD, EXTENTCD y CHDCLASS (constantes por varianza cero o por
+criterio de inclusión); los ficheros de laboratorio longitudinales y todas las variables post-basales,
+de tratamiento (TX*/SAF*) o de fecha (B_*DY, STUDYDAY, WEEK, PHASE); las versiones categorizadas
+redundantes de variables ya incluidas (AGE65YN, B_WGTN, B_HGBN, AGEN, B_ECOG2, BSEPON); los flags
+administrativos o de elegibilidad (EVALPRIM, EVALQOL, EVALRND, EXHBCOYN, SITEID, PROTOCOL). La región
+de aleatorización solo existe a través de SITEID y requeriría derivación; se deja fuera por su
+carácter administrativo y su alta cardinalidad.
+
+#### Diseño de validación cruzada anidada
+
+- Bucle externo: k=5 estratificado por evento x TXG (cuatro clases), idéntico al esquema del primario.
+  Produce la estimación de rendimiento sin sesgo mediante predicciones out-of-fold y bootstrap n=1000
+  para los intervalos de confianza al 95%.
+- Bucle interno: dentro de cada fold de entrenamiento externo, k=5 estratificado. TODA la selección de
+  características y el ajuste de hiperparámetros ocurren aquí. La mejor configuración se reentrena sobre
+  el fold de entrenamiento externo completo y se aplica al fold de test externo, que nunca interviene
+  en la selección ni en el ajuste.
+- Control anti-fuga: el preprocesador (imputación adaptativa, estandarización, one-hot) se ajusta solo
+  sobre el train interno durante el ajuste y solo sobre el train externo en el reentrenamiento. El
+  brazo TXG nunca es predictor, solo estratificación.
+
+#### Modelos y selección embebida (en el bucle interno)
+
+- Cox elastic-net (CoxnetSurvivalAnalysis): la penalización L1 realiza la selección (coeficientes a
+  cero). Se ajustan l1_ratio y la fuerza de penalización.
+- Random Survival Forest: poda por importancia de permutación; se ajustan n_estimators, max_depth,
+  min_samples_leaf y max_features.
+- XGBoost (objetivo survival:cox): poda por ganancia; ajuste con early stopping sobre la validación
+  interna.
+
+#### Optimización de hiperparámetros
+
+Optuna con muestreador TPE (bayesiano) y pruning, semillas fijas (SEED = 42). Configuración de la
+corrida final: 100 trials por modelo y por fold externo. Antes de la corrida larga se ejecutará una
+pasada de validación corta y NO reportada (20 a 30 trials, solo OS) para confirmar que el pipeline
+anidado funciona de extremo a extremo; sus números no se publican en ningún entregable.
+
+#### Criterio a priori y comparación
+
+Criterio idéntico al del primario: C-index (métrica principal) más IBS más estabilidad entre folds
+(coeficiente de variación). La comparación es entre la Estrategia 2 anidada y el baseline de 7
+variables de la Estrategia 1 corrido bajo el MISMO protocolo anidado (mismos folds externos, mismo
+reentrenamiento, mismas predicciones out-of-fold). Queda explícito que el C-index del baseline bajo el
+protocolo anidado NO será el 0.599 de la validación cruzada simple del pipeline primario: el valor
+de referencia para juzgar la mejora es el del baseline reejecutado en el esquema anidado, no el del
+primario. Se reportará con honestidad cualquier resultado, incluida la ausencia de mejora, coherente
+con el hallazgo del primario (KPI-3 no cumplido).
+
+#### Endpoints y artefactos
+
+Endpoints: OS (primario) y PFS (secundario), ambos con el protocolo anidado completo. Artefactos
+propios de la Estrategia 2: dataset_strategy2 (parquet y csv), diccionario y manifiesto con su SHA-256
+de referencia. El dataset primario, sus hashes y la verificación KPI-1 permanecen intactos.
+
+**Alternativas descartadas:** validación cruzada plana con selección sobre todo el conjunto (sesgo de
+selección optimista); usar los laboratorios longitudinales como basales (riesgo de fuga); mantener
+peso e IMC simultáneamente (colinealidad); incluir las categorizaciones IVRS redundantes.
