@@ -2,15 +2,17 @@
   "name": "tfg-nesp-docs",
   "version": "0.1.0",
   "private": true,
-  "description": "Generacion de documentos (.docx) del TFG: D3 memoria, D4 paquete de transparencia, D5 presentacion.",
+  "description": "Generacion de documentos del TFG: D3 memoria, D4 paquete de transparencia, D5 presentacion y Model Card.",
   "type": "module",
   "scripts": {
     "build:d3": "node docs/scripts/build_d3.js",
     "build:d4": "node docs/scripts/build_d4.js",
-    "build:d5": "node docs/scripts/build_d5.js"
+    "build:d5": "node docs/scripts/build_d5.js",
+    "build:modelcard": "node docs/scripts/build_model_card.js"
   },
   "dependencies": {
     "docx": "^8.5.0",
+    "marked": "^18.0.4",
     "pptxgenjs": "^4.0.1"
   }
 }
