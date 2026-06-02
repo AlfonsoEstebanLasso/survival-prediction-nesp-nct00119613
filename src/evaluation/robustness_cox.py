@@ -498,7 +498,7 @@ def main() -> int:
         event_col = ep_cfg["event"]
         time_col  = ep_cfg["time"]
         ep_label  = "OS (tiempo hasta muerte)" if ep_name == "OS" \
-                    else "SLP (supervivencia libre de progresion)"
+                    else "SLP (supervivencia libre de progresión)"
 
         logger.info("=== Robustez | Endpoint %s ===", ep_name)
         logger.info("  Recogiendo predicciones OOF...")
