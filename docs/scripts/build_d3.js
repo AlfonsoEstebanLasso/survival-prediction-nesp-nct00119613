@@ -17,7 +17,7 @@ import {
   Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType,
   Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType,
   Header, Footer, PageNumber, TableOfContents, SimpleField, ImageRun,
-  PageBreak, VerticalAlign, LevelFormat, convertInchesToTwip,
+  PageBreak, VerticalAlign, LevelFormat, convertInchesToTwip, HeightRule,
 } from "docx";
 import { FONT, COLORS, TABLE } from "./_style.js";
 
@@ -49,6 +49,16 @@ function pngSize(buf) {
   const h = buf.readUInt32BE(20);
   return { w, h };
 }
+// Carga el logo UOC de la portada (extraido de la plantilla oficial). Si no esta
+// disponible, devuelve null y la portada cae a una cabecera de texto.
+function tryReadLogo() {
+  try {
+    return fs.readFileSync(path.join(ROOT, "docs", "assets", "uoc_logo.png"));
+  } catch {
+    return null;
+  }
+}
+const LOGO = tryReadLogo();
 
 // ----------------------------------------------------------------------------
 // Carga de datos del pipeline
@@ -234,30 +244,66 @@ function footerParagraph() {
 const children = [];
 const A = (...xs) => xs.forEach((x) => children.push(x));
 
-// ---- PORTADA ----------------------------------------------------------------
-A(
-  new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 1200, after: 200 },
-    children: [run("Universitat Oberta de Catalunya (UOC)", { bold: true, size: 28, color: COLORS.blueDark })] }),
-  new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 80 },
-    children: [run("Grado en Ciencia de Datos Aplicada", { size: 24, color: COLORS.blueDark })] }),
-  new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 600 },
-    children: [run("Trabajo Final de Grado", { size: 24 })] }),
-  new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 400, after: 300 },
-    children: [run("Prediccion de respuesta a farmacos quimioterapeuticos a partir de datos clinicos anonimizados",
-      { bold: true, size: 40, color: COLORS.blueDark })] }),
-  new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 600 },
-    children: [run("Prototipo de investigacion reproducible y auditable para la prediccion de supervivencia bajo quimioterapia",
-      { size: 24, italics: true, color: "555555" })] }),
-);
-const portadaFicha = [
-  ["Estudiante", "Alfonso Esteban Lasso"],
-  ["Programa", "[PLACEHOLDER: programa exacto, p. ej. Grado en Ciencia de Datos Aplicada]"],
-  ["Area del Trabajo Final", "[PLACEHOLDER: area exacta del TF]"],
-  ["Tutor de TF", "Tutor del TFG"],
-  ["Profesor responsable de la asignatura (PRA)", "[PLACEHOLDER: nombre del PRA]"],
-  ["Fecha de entrega", "06/2026"],
+// ---- PORTADA (formato de la plantilla oficial UOC v9) -----------------------
+const COVER_CYAN = "73EDFF";  // banner superior de la portada UOC
+const COVER_NAVY = "000078";  // color del titulo en la plantilla UOC
+const TITLE_D3 = "Prediccion de respuesta a farmacos quimioterapeuticos a partir de datos clinicos anonimizados";
+const SUBTITLE_D3 = "Prototipo de investigacion reproducible y auditable para la prediccion de supervivencia bajo quimioterapia";
+
+// Logo UOC (de la plantilla oficial) escalado al ancho del area de texto. Si no
+// esta disponible, se cae a una cabecera de texto.
+if (LOGO) {
+  const { w, h } = pngSize(LOGO);
+  const wPx = 600;
+  const hPx = Math.round((wPx * h) / w);
+  A(new Paragraph({ alignment: AlignmentType.LEFT, spacing: { before: 200, after: 400 },
+    children: [new ImageRun({ data: LOGO, transformation: { width: wPx, height: hPx } })] }));
+} else {
+  A(new Paragraph({ alignment: AlignmentType.LEFT, spacing: { before: 200, after: 400 },
+    children: [run("Universitat Oberta de Catalunya (UOC)", { bold: true, size: 28, color: COLORS.blueDark })] }));
+}
+
+// Banner superior cian con titulo y subtitulo (replica del banner de la plantilla).
+A(new Table({
+  width: { size: 100, type: WidthType.PERCENTAGE },
+  borders: {
+    top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE },
+    left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE },
+    insideHorizontal: { style: BorderStyle.NONE }, insideVertical: { style: BorderStyle.NONE },
+  },
+  rows: [new TableRow({
+    height: { value: 4206, rule: HeightRule.ATLEAST },
+    children: [new TableCell({
+      shading: { type: ShadingType.CLEAR, color: "auto", fill: COVER_CYAN },
+      verticalAlign: VerticalAlign.CENTER,
+      margins: { top: 200, bottom: 200, left: 300, right: 300 },
+      children: [
+        new Paragraph({ alignment: AlignmentType.LEFT, spacing: { after: 220 },
+          children: [run(TITLE_D3, { bold: true, size: 40, color: COVER_NAVY })] }),
+        new Paragraph({ alignment: AlignmentType.LEFT,
+          children: [run(SUBTITLE_D3, { size: 26, color: COVER_NAVY })] }),
+      ],
+    })],
+  })],
+}));
+
+// Pila de campos de la portada, en el mismo orden que la plantilla.
+const coverFields = [
+  [null, "Alfonso Esteban Lasso"],
+  [null, "Grado en Ciencia de Datos Aplicada"],
+  [null, "Salud"],
+  ["Nombre del Tutor/a de TF", "Tutor del TFG"],
+  ["Profesor/a responsable de la asignatura", "PRA del TFG"],
+  [null, "06/2026"],
 ];
-A(table([["Campo", "Valor"], ...portadaFicha]));
+coverFields.forEach(([label, value], i) => {
+  const runs = label
+    ? [run(label + ": ", { size: 26, color: COLORS.blueDark }),
+       run(value, { bold: true, size: 26, color: COLORS.blueDark })]
+    : [run(value, { bold: true, size: 26, color: COLORS.blueDark })];
+  A(new Paragraph({ alignment: AlignmentType.LEFT,
+    spacing: { before: i === 0 ? 500 : 60, after: 60 }, children: runs }));
+});
 A(new Paragraph({ children: [new PageBreak()] }));
 
 // ---- PAGINA DE LICENCIA ------------------------------------------------------
@@ -284,16 +330,15 @@ A(table([
   ["Titulo del trabajo", "Prediccion de respuesta a farmacos quimioterapeuticos a partir de datos clinicos anonimizados"],
   ["Nombre del autor", "Alfonso Esteban Lasso"],
   ["Nombre del director (tutor)", "Tutor del TFG"],
-  ["Nombre del PRA", "[PLACEHOLDER: nombre del PRA]"],
+  ["Nombre del PRA", "PRA del TFG"],
   ["Fecha de entrega (mm/aaaa)", "06/2026"],
-  ["Titulacion o programa", "[PLACEHOLDER: titulacion o programa exacto]"],
-  ["Area del Trabajo Final", "[PLACEHOLDER: area del TF]"],
+  ["Titulacion o programa", "Grado en Ciencia de Datos Aplicada"],
+  ["Area del Trabajo Final", "Salud"],
   ["Idioma del trabajo", "Castellano (con abstract en ingles)"],
 ]));
 A(new Paragraph({ spacing: { before: 120, after: 40 },
   children: [run("Palabras clave (maximo 3): ", { bold: true }),
-    run("supervivencia, quimioterapia, reproducibilidad", {}),
-    run("  [PLACEHOLDER: a validar por el tutor]", { color: PLACEHOLDER, italics: true })] }));
+    run("supervivencia, quimioterapia, reproducibilidad", {})] }));
 A(h3("Resumen del Trabajo (maximo 250 palabras)"));
 A(p(resumenES));
 A(h3("Abstract (maximum 250 words)"));
