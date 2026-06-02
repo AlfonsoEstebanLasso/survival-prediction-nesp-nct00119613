@@ -309,8 +309,8 @@ A(h2("2.2 Advertencia de no uso clinico"));
 A(p([run("El modelo no esta validado para uso clinico ni para decisiones individuales de pacientes. Su finalidad es academica y metodologica.", { bold: true })]));
 
 A(h2("2.3 Poblacion y datos"));
-A(bullet("Cohorte: estudio NESP-Oncology-20010145 (NCT00119613), Project Data Sphere."));
-A(bullet("n = 479 sujetos (una fila por sujeto). Eventos OS: 397 (83%); censurados: 82 (17%). Eventos PFS: 440 (92%); censurados: 39 (8%)."));
+A(bullet("Cohorte: estudio NESP-Oncology-20010145 (NCT00119613), Project Data Sphere. Ensayo de fase III, aleatorizado, doble ciego y controlado con placebo, en pacientes con cancer de pulmon microcitico (de celulas pequenas) en estadio extenso, no tratados previamente, que reciben quimioterapia con platino y etoposido (darbepoetina alfa frente a placebo). Se reformula como pronostico de supervivencia y no estudia el efecto del agente del estudio."));
+A(bullet("n = 479 sujetos (una fila por sujeto). El protocolo planifico aproximadamente 600 sujetos (unos 300 por brazo, con analisis final previsto a las 496 muertes); la cohorte disponible comprende 479. Eventos OS: 397 (83%); censurados: 82 (17%). Eventos PFS: 440 (92%); censurados: 39 (8%)."));
 A(bullet("Brazo de aleatorizacion NESP/placebo usado como estratificacion, no como predictor."));
 A(bullet("Predictores (Estrategia 1): AGE, SEXCD, B_ECOGN, B_WEIGHT, CADIAGM, B_HGB, MEDHX_N."));
 A(bullet("Endpoints: OS (DTH, DTHDY) y PFS (PFSCD, PFSDY)."));

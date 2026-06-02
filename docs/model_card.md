@@ -12,8 +12,8 @@ El modelo no esta validado para uso clinico ni para decisiones individuales de p
 
 ## Poblacion y datos
 
-- Cohorte: estudio NESP-Oncology-20010145 (NCT00119613), Project Data Sphere.
-- n = 479 sujetos (una fila por sujeto). Eventos OS: 397 (83%); censurados: 82 (17%). Eventos PFS: 440 (92%); censurados: 39 (8%).
+- Cohorte: estudio NESP-Oncology-20010145 (NCT00119613), Project Data Sphere. Ensayo de fase III, aleatorizado, doble ciego y controlado con placebo, en pacientes con cancer de pulmon microcitico (de celulas pequenas) en estadio extenso, no tratados previamente, que reciben quimioterapia con platino y etoposido (darbepoetina alfa frente a placebo). El trabajo lo reformula como pronostico de supervivencia y no estudia el efecto del agente del estudio.
+- n = 479 sujetos (una fila por sujeto). El protocolo del ensayo planifico aproximadamente 600 sujetos (unos 300 por brazo, con analisis final previsto a las 496 muertes); la cohorte disponible en Project Data Sphere comprende 479. Eventos OS: 397 (83%); censurados: 82 (17%). Eventos PFS: 440 (92%); censurados: 39 (8%).
 - Brazo de aleatorizacion NESP/placebo usado como estratificacion, no como predictor.
 - Predictores (Estrategia 1): AGE, SEXCD, B_ECOGN, B_WEIGHT, CADIAGM, B_HGB, MEDHX_N.
 - Endpoints: OS (DTH, DTHDY) y PFS (PFSCD, PFSDY).
