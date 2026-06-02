@@ -280,3 +280,31 @@ ampliacion de la memoria final (D3) con la matriz de trazabilidad de resultados 
   PEC4 evalua los resultados de aprendizaje y la matriz hace explicita su cobertura.
 
 **Pendiente manual:** actualizar campos e indices en Word (F9) y exportar D3 y D5 a PDF.
+
+### Generador del paquete de transparencia D4 en Word
+
+**Fecha:** 2026-06-02. **Alcance:** generacion del entregable D4 como documento Word.
+
+**Decision:** se crea docs/scripts/build_d4.js (npm run build:d4), que genera
+output/D4_paquete_transparencia.docx con el estilo de la memoria D3 (Arial, paleta
+corporativa, cabecera UOC, pie "Pagina X de Y", tablas con filas alternadas, sin guiones
+largos). Reune las tres partes del paquete: checklist TRIPOD+AI con referencia cruzada a D3,
+Model Card final y analisis de riesgos. La fuente de contenido es docs/D4_paquete_transparencia.md
+y docs/model_card.md; en caso de discrepancia prevalece docs/model_card.md.
+
+### Verificacion de referencias y correccion del ano de la AEPD
+
+**Fecha:** 2026-06-02. **Alcance:** revision de las 22 referencias de la bibliografia de D3
+(identicas en D4) para comprobar que son correctas y localizables (DOI, EUR-Lex, BOE, JMLR,
+JOSS, arXiv, PubMed, etc.).
+
+**Resultado:** 21 de 22 correctas y revisables. Se detecta un unico error de fecha: la guia
+de la AEPD "Orientaciones y garantias en los procedimientos de anonimizacion de datos
+personales" figuraba con ano 2019; la guia con ese titulo es de 2016 (version 1.0). Se corrige
+la referencia [16] en docs/scripts/build_d3.js de 2019 a 2016 y se regenera la memoria.
+
+**Notas:** las referencias [11] Oken (1982, ECOG) y [22] Platt (1999, capitulo de Advances in
+Large Margin Classifiers, MIT Press) no tienen DOI; su trazabilidad se asegura por PMID y por
+la ficha bibliografica. El enlace estable verificado para Platt es el registro de Semantic
+Scholar (no la pagina de BibSonomy). La bibliografia de los entregables es texto plano, sin
+URLs incrustadas, por lo que los enlaces se mantienen como referencia de revision externa.
