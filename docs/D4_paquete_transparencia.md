@@ -314,4 +314,4 @@ Escalas: probabilidad e impacto se valoran como Baja, Media o Alta. La columna d
 
 ---
 
-Fin del documento D4. Fuentes: docs/CLAUDE.md, docs/decision_log.md, docs/model_card.md y artefactos de la carpeta output (ficheros JSON y CSV).
+Fin del documento D4. Fuentes: documentacion interna del proyecto (decision_log y model_card) y artefactos de la carpeta output (ficheros JSON y CSV).

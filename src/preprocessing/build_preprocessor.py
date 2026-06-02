@@ -202,7 +202,7 @@ class MissingnessAwareImputer(BaseEstimator, TransformerMixin):
 # Justificacion: encapsular el Pipeline garantiza que las estadisticas de ajuste
 # (medianas, modas, parametros del IterativeImputer, media/std del StandardScaler,
 # categorias del OneHotEncoder) solo se calculan sobre el fold de entrenamiento,
-# cumpliendo el invariante anti-fuga establecido en el CLAUDE.md del proyecto.
+# cumpliendo el invariante anti-fuga establecido en la metodologia del proyecto.
 # El ColumnTransformer divide el flujo en dos ramas: estandarizacion de numericas
 # y codificacion one-hot de categoricas (drop='first' para evitar multicolinealidad).
 def build_preprocessor(

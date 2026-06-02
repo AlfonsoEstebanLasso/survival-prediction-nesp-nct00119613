@@ -308,3 +308,31 @@ Large Margin Classifiers, MIT Press) no tienen DOI; su trazabilidad se asegura p
 la ficha bibliografica. El enlace estable verificado para Platt es el registro de Semantic
 Scholar (no la pagina de BibSonomy). La bibliografia de los entregables es texto plano, sin
 URLs incrustadas, por lo que los enlaces se mantienen como referencia de revision externa.
+
+### Documentacion del codigo del pipeline y los tests
+
+**Fecha:** 2026-06-02. **Alcance:** anadir comentarios explicativos a los 14 modulos de src/
+y los 3 ficheros de tests/.
+
+**Decision:** se documenta cada funcion con un bloque de comentarios '#' encima de su definicion
+y comentarios en linea en los pasos metodologicos clave. La documentacion prioriza la perspectiva
+de ciencia de datos (control anti-fugas, validacion cruzada estratificada, bootstrap OOF,
+criterios a priori, utilidad y privacidad de los sinteticos) con notas oncologicas breves donde
+aportan (OS/PFS, censura, ECOG, comorbilidad MEDHX_N, brazo NESP). No se modifican docstrings de
+cabecera ni codigo. Estilo del proyecto: sin tildes, sin enie y sin guiones largos.
+
+**Verificacion:** el flujo de tokens es identico al previo en los 20 ficheros (solo se anaden
+comentarios) y los 34 smoke tests siguen pasando.
+
+### Revision de marcas de IA y referencias a Claude en el codigo
+
+**Fecha:** 2026-06-02. **Alcance:** auditar el repositorio para que el codigo y los entregables
+no contengan marcas de agua de IA ni referencias al asistente.
+
+**Resultado:** sin caracteres invisibles sospechosos (ZWSP, BOM intercalado, etc.) en los 33
+ficheros de texto. Sin referencias a Claude en los entregables D3 y D5. Se corrigen las referencias
+encontradas en codigo y entregables: docstring de src/data/etl_nesp_nct00119613.py, comentario de
+src/preprocessing/build_preprocessor.py y la linea de fuentes del paquete D4 (build_d4.js y
+docs/D4_paquete_transparencia.md), con regeneracion del D4 (0 referencias tras el cambio). Los
+ficheros propios del entorno de trabajo (CLAUDE.md, .claude/settings.json y la seccion del README)
+se tratan aparte por ser configuracion de desarrollo, no codigo del pipeline.

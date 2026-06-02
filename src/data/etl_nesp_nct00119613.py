@@ -38,7 +38,7 @@ Control anti-leakage
     (RACECD, TUMORCD, EXTENTCD, CHDCLASS). El motivo de cada exclusion queda
     registrado en el manifiesto.
 
-Uso (por ejemplo, desde Claude Code en Windows)
+Uso (por ejemplo, desde la linea de comandos en Windows)
     python etl_nesp_nct00119613.py
     python etl_nesp_nct00119613.py --data-dir "SAS dataset" --out ".\\output"
 

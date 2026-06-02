@@ -487,7 +487,7 @@ A(table([
 ], { aligns: A_RISK }));
 A(tableCaption("Riesgos de privacidad y de uso indebido, y su estado al cierre."));
 
-A(p([run("Fin del documento D4. ", { bold: true }), run("Fuentes: CLAUDE.md, docs/decision_log.md, docs/model_card.md y artefactos de la carpeta output (ficheros JSON y CSV).")]));
+A(p([run("Fin del documento D4. ", { bold: true }), run("Fuentes: documentacion interna del proyecto (decision_log y model_card) y artefactos de la carpeta output (ficheros JSON y CSV).")]));
 
 // ============================================================================
 // DOCUMENTO
