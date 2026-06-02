@@ -80,17 +80,17 @@ tests/             pruebas (smoke tests del pipeline)
 - D0 Plan de trabajo: completo.
 - D1 Repositorio del pipeline: ETL completo; faltan preprocesado, modelado, evaluacion, reporting y el release versionado.
 - D2 Dataset derivado, diccionario y reporte de calidad: completo.
-- D3 Memoria final: borrador; redaccion con valores reales pendiente.
-- D4 Paquete de transparencia (TRIPOD+AI, Model Card final, analisis de riesgos): parcial. Model Card viva en `docs/model_card.md`.
-- D5 Presentacion y guion de defensa: pendiente.
+- D3 Memoria final: completo. Generada con valores reales del pipeline e incluye el anexo 7.4 (matriz de trazabilidad de resultados de aprendizaje) en `output/D3_Memoria_TFG_NESP.docx` (generador `docs/scripts/build_d3.js`). Pendiente manual: actualizar campos en Word (F9) y exportar a PDF.
+- D4 Paquete de transparencia (TRIPOD+AI, Model Card final, analisis de riesgos): completo. Generado en `output/D4_paquete_transparencia.docx` (generador `docs/scripts/build_d4.js`); fuente viva en `docs/D4_paquete_transparencia.md` y `docs/model_card.md`. Pendiente manual: F9 y exportar a PDF.
+- D5 Presentacion y guion de defensa: completo. Presentacion en `output/D5_presentacion.pptx` (generador `docs/scripts/build_d5.js`, libreria pptxgenjs) y guion cronometrado a 20 minutos en `output/D5_guion.md`. Pendiente manual: grabar el video de la exposicion y exportar la presentacion a PDF.
 
-Sprints: 1 a 5 cerrados; Sprint 6 (datos sinteticos y riesgo de reidentificacion) en cierre; Sprint 7 redaccion y TRIPOD+AI; Sprint 8 entorno limpio, release y defensa. Entrega final PEC4: 02/06/2026.
+Sprints: 1 a 6 cerrados; Sprint 7 (redaccion y TRIPOD+AI) cerrado; Sprint 8 (entorno limpio, release y defensa) en curso, pendiente el release versionado de D1 y la grabacion del video. Entrega final PEC4: 02/06/2026.
 
 KPIs: KPI-1 reproducibilidad, KPI-2 calidad de datos, KPI-3 rendimiento (mejora sobre baseline), KPI-4 calibracion, KPI-5 evaluacion etico-legal.
 
 ## 11. Generacion de documentos (.docx)
 
-Los entregables D3, D4 y D5 se generan como Word (.docx) mediante scripts de Node con la libreria `docx` (ver `package.json` y `docs/scripts/_style.js`). Sigue siempre `docs/style_guide.md`: fuente Arial, azul corporativo (oscuro 1F4E79, claro D5E8F0), verde 1F7A3A para completo y ambar B7791F para en curso, pie "Pagina X de Y", cabecera UOC, tablas con filas alternadas y resumenes ejecutivos con barra lateral azul. Recuerda: sin guiones largos.
+Los entregables D3 y D4 se generan como Word (.docx) mediante scripts de Node con la libreria `docx`; el D5 se genera como PowerPoint (.pptx) con la libreria `pptxgenjs` (ver `package.json` y `docs/scripts/_style.js`). Sigue siempre `docs/style_guide.md`: fuente Arial, azul corporativo (oscuro 1F4E79, claro D5E8F0), verde 1F7A3A para completo y ambar B7791F para en curso, pie "Pagina X de Y", cabecera UOC, tablas con filas alternadas y resumenes ejecutivos con barra lateral azul. Recuerda: sin guiones largos.
 
 ## 12. Como trabajar en este repositorio
 
