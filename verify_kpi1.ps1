@@ -12,12 +12,12 @@
         - environment.yml en la raiz del proyecto (versiones exactas congeladas).
         - Ficheros SAS crudos en el directorio indicado por -DataDir (por defecto
           "SAS dataset"). No se versionan; deben colocarse manualmente.
-        - Opcional: output/kpi1_reference_hashes.txt con los hashes de referencia.
+        - Opcional: kpi1_reference_hashes.txt (en la raiz) con los hashes de referencia.
 
     Salidas
         - Artefactos del ETL regenerados en output/ (dataset, diccionario, manifiesto).
-        - output/kpi1_reference_hashes.txt: en la primera ejecucion fija la referencia;
-          en las siguientes la compara.
+        - kpi1_reference_hashes.txt (en la raiz, versionado): en la primera ejecucion fija
+          la referencia; en las siguientes la compara.
         - Codigo de salida 0 si todo coincide y los tests pasan; 1 en caso contrario.
 
     Pasos
@@ -40,6 +40,9 @@
 
 .PARAMETER Recreate
     Si se indica, elimina el entorno limpio si ya existe y lo vuelve a crear desde cero.
+    Recomendado para una verificacion estrictamente aislada: con PYTHONNOUSERSITE=1, la
+    recreacion fuerza a instalar todas las dependencias dentro del entorno y no desde el
+    user-site global.
 
 .EXAMPLE
     .\verify_kpi1.ps1
@@ -61,6 +64,12 @@ param(
 $ErrorActionPreference = "Stop"
 $ProjectRoot = $PSScriptRoot
 Set-Location $ProjectRoot
+
+# Aislamiento estricto: ignorar el user-site global (AppData\Roaming\Python) para que el
+# entorno limpio use unicamente sus propios paquetes. Surte pleno efecto al crear el
+# entorno con -Recreate, ya que fuerza a pip a instalar todas las dependencias dentro del
+# entorno en lugar de darlas por satisfechas desde el user-site.
+$env:PYTHONNOUSERSITE = "1"
 
 function Write-Step  ([string] $m) { Write-Host "`n==== $m ====" -ForegroundColor Cyan }
 function Write-Ok    ([string] $m) { Write-Host "  OK  $m" -ForegroundColor Green }
@@ -172,7 +181,7 @@ $artefacts = @(
     "output/nesp_nct00119613_dataset.csv",
     "output/nesp_nct00119613_dictionary.csv"
 )
-$refFile = "output/kpi1_reference_hashes.txt"
+$refFile = "kpi1_reference_hashes.txt"
 
 $current = @{}
 foreach ($a in $artefacts) {
