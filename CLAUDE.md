@@ -23,7 +23,7 @@ Trabajo Final de Grado del Grado en Ciencia de Datos (UOC, semestre 2025.1). Tit
 - Modelos: Cox proporcional (baseline), Random Survival Forest y XGBoost/LightGBM con perdida de supervivencia.
 - Metricas: C-index, IBS, Brier, AUC dependiente del tiempo y curvas de calibracion con bandas. Postcalibracion (Platt e isotonica) evaluada; el modelo final se reporta sin postcalibracion por parsimonia.
 - Criterio de seleccion de modelo, fijado a priori (registrado en el Decision log): metrica principal (C-index) mas IBS mas coeficiente de variacion entre folds (estabilidad). Aplica esta regla a los numeros reales para decidir el modelo final.
-- Interpretabilidad: SHAP post-hoc, con la advertencia de que no es causal y puede ser inestable bajo cambio de distribucion.
+- Interpretabilidad: hazard ratios del Cox final (lectura descriptiva, no causal), reportados con IC95% y test de proporcionalidad de Schoenfeld. SHAP estaba previsto para el candidato no lineal (RSF); se descarta al ser el modelo final un Cox con coeficientes directamente interpretables. Se mantiene la advertencia de que las asociaciones no son causales.
 - Marco regulatorio: RGPD, LOPDGDD, AI Act y guias de anonimizacion de la AEPD. Advertencia explicita de no uso clinico.
 
 ## 4. Datos y privacidad (privacidad por diseno)
