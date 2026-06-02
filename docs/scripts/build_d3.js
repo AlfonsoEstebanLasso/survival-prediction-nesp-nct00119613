@@ -638,6 +638,58 @@ A(pc("El codigo completo del pipeline (ETL, preprocesado, modelado, evaluacion, 
 A(h2("7.3 Paquete de transparencia (D4)"));
 A(pc("El checklist TRIPOD+AI y la Model Card final forman parte del entregable D4 (paquete de transparencia), junto con el analisis de riesgos. La Model Card se ha mantenido viva durante todo el desarrollo y se cierra con los valores reales del pipeline. Estos documentos se referencian aqui y se entregan como parte de D4."));
 
+A(h2("7.4 Matriz de trazabilidad de resultados de aprendizaje"));
+A(pc("La siguiente matriz mapea cada resultado de aprendizaje del TFG a la seccion de la memoria o al entregable donde se evidencia. Los resultados marcados como fuera de alcance no aplican a este tipo de proyecto."));
+
+// Columnas: Resultado (izquierda), Evidencia principal (izquierda), Cobertura (centro).
+const RA_ALIGNS = [AlignmentType.LEFT, AlignmentType.LEFT, AlignmentType.CENTER];
+
+A(h3("Conocimientos"));
+A(table([
+  ["Resultado", "Evidencia principal (seccion de D3 o entregable)", "Cobertura"],
+  ["K1", "1.1 (el pronostico bajo quimioterapia como oportunidad de mejora)", "Solida"],
+  ["K2", "2.3, 2.4 y 3.2 (modelos de supervivencia, metricas, bootstrap y calibracion)", "Solida"],
+  ["K3", "2.6 y D1 (pipeline modular, semillas y pruebas; sin escala de gran volumen)", "Parcial"],
+  ["K4", "2.6 y 2.7 (ejecucion local sin nube; volumen de datos moderado)", "Parcial"],
+  ["K5", "2.1 (seleccion de fuente, ETL, criterios y diccionario de variables)", "Solida"],
+  ["K6", "2.3, 2.4 y 3.1 (metodos y comparativa desde las preguntas del trabajo)", "Solida"],
+  ["K7", "3.2 a 3.6 y D5 (figuras de Brier, AUC, calibracion, forest y subgrupos)", "Solida"],
+  ["K8", "2.2, 3.1, 3.3, 3.4 y 4.2 (fugas, KPI-3, limites de calibracion, Schoenfeld, reflexion critica)", "Solida"],
+], { aligns: RA_ALIGNS }));
+A(tableCaption("Trazabilidad de los conocimientos (K) a las secciones y entregables del TFG."));
+
+A(h3("Habilidades"));
+A(table([
+  ["Resultado", "Evidencia principal (seccion de D3 o entregable)", "Cobertura"],
+  ["S1", "2.3, 2.4 y D1 (integracion de estadistica y programacion)", "Solida"],
+  ["S2", "2.6 y D1 (semillas, pruebas de humo y cabeceras de proposito)", "Solida"],
+  ["S3", "2.1, 2.2 y 2.6 (flujo completo con manifiesto de calidad)", "Solida"],
+  ["S4", "2.1 (uniones sobre las tablas del estudio por SUBJID, hashes; fuente unica)", "Parcial"],
+  ["S5", "2.1 y 2.2 (datos clinicos estructurados)", "Parcial"],
+  ["S6", "2.3, 2.4 y 3.1 (solucion analitica con metodos y herramientas apropiados)", "Solida"],
+  ["S7", "1.3.2, 2.5, 3.6 y D4 (privacidad por diseno, marco legal y reidentificacion)", "Solida"],
+  ["S8", "Fuera del alcance del TFG (no hay interfaz de usuario)", "Fuera de alcance"],
+  ["S9", "3.2 a 3.6 y D5 (figuras y diapositivas)", "Solida"],
+  ["S10", "Fuera del alcance del TFG (no hay administracion de redes ni sistemas)", "Fuera de alcance"],
+  ["S11", "1.4, 2.7 y 3.1 (estrategias consideradas, valoracion economica y comparativa)", "Solida"],
+  ["S12", "3.x, 4.x, resumen y D5 (comunicacion rigurosa y critica)", "Solida"],
+  ["S13", "Memoria completa (escrita) y video D5 (oral)", "Solida"],
+  ["S14", "1.3, 1.4 y 4.1 (aportacion metodologica; innovacion de proceso, no de producto)", "Parcial"],
+  ["S15", "Abstract de la ficha (texto academico en ingles)", "Parcial"],
+], { aligns: RA_ALIGNS }));
+A(tableCaption("Trazabilidad de las habilidades (S) a las secciones y entregables del TFG."));
+
+A(h3("Competencias"));
+A(table([
+  ["Resultado", "Evidencia principal (seccion de D3 o entregable)", "Cobertura"],
+  ["C1", "1.4, 1.5 y 4.3 (gestion del proyecto, sprints y pivotes)", "Solida"],
+  ["C2", "TFG completo, D5 y defensa de la PEC5", "Solida"],
+  ["C4", "1.3, 3.5 y 4.4 (tres dimensiones de la CCEG, sexo como perspectiva de genero)", "Solida"],
+  ["C5", "3.1, 4.2, 4.4 y D4 (KPI-3 honesto, reflexion autocritica y analisis de riesgos)", "Solida"],
+  ["C6", "2.6 y D1 (implementacion con tecnologias digitales)", "Solida"],
+], { aligns: RA_ALIGNS }));
+A(tableCaption("Trazabilidad de las competencias (C) a las secciones y entregables del TFG."));
+
 // ============================================================================
 // DOCUMENTO
 // ============================================================================

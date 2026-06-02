@@ -258,3 +258,25 @@ Model Card.
 **Postcalibracion:** Platt e isotonica evaluadas. Mejoras marginales sin significacion
 estadistica frente a los IC bootstrap. Decision final: modelo reportado sin postcalibracion
 por parsimonia.
+
+### Entregable D5 y matriz de trazabilidad de resultados de aprendizaje (PEC4)
+
+**Fecha:** 2026-06-02. **Alcance:** generacion de la presentacion de defensa (D5) y
+ampliacion de la memoria final (D3) con la matriz de trazabilidad de resultados de aprendizaje.
+
+**Decisiones:**
+
+- **D5 presentacion (output/D5_presentacion.pptx):** 15 diapositivas con la paleta del
+  proyecto (azul 1F4E79 y D5E8F0, verde 1F7A3A, ambar B7791F), fuente Arial y una idea por
+  diapositiva, apoyada en las figuras de output/. Generador reproducible en
+  docs/scripts/build_d5.js (dependencia pptxgenjs). Guion cronometrado a 20 minutos en
+  output/D5_guion.md, con preguntas anticipadas del tribunal. Motivo: requisitos de la PEC4
+  (presentacion de unas 20 transparencias y exposicion oral de maximo 20 minutos).
+- **Anexo 7.4 de la memoria D3:** matriz de trazabilidad que mapea cada resultado de
+  aprendizaje del TFG (conocimientos K, habilidades S y competencias C) a la seccion de la
+  memoria o al entregable donde se evidencia, con una columna de cobertura (solida, parcial,
+  fuera de alcance). S8 (interfaz de usuario) y S10 (administracion de redes y sistemas) se
+  marcan como fuera del alcance del TFG por no aplicar a este tipo de proyecto. Motivo: la
+  PEC4 evalua los resultados de aprendizaje y la matriz hace explicita su cobertura.
+
+**Pendiente manual:** actualizar campos e indices en Word (F9) y exportar D3 y D5 a PDF.
