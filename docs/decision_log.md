@@ -471,3 +471,29 @@ de referencia. El dataset primario, sus hashes y la verificación KPI-1 permanec
 **Alternativas descartadas:** validación cruzada plana con selección sobre todo el conjunto (sesgo de
 selección optimista); usar los laboratorios longitudinales como basales (riesgo de fuga); mantener
 peso e IMC simultáneamente (colinealidad); incluir las categorizaciones IVRS redundantes.
+
+### Operacionalización de la selección embebida de la Estrategia 2
+
+**Fecha:** 2026-06-03. **Alcance:** detalle de implementación de la poda por importancia
+pre-registrada, fijado antes de la corrida reportada (src/models/nested_cv_strategy2.py).
+
+Se mantiene la letra del pre-registro: la selección de variables es embebida y vive en el bucle
+interno. Operacionalización exacta, igual en el bucle interno (para el tuning) y en el
+reentrenamiento externo (sobre el train externo), siempre sin ver el test externo:
+
+- Cox elastic-net: selección por penalización L1 (CoxnetSurvivalAnalysis con un par alpha, l1_ratio
+  por trial). Las variables retenidas son las de coeficiente no nulo; se registra su número por fold.
+- RSF: se ajusta el bosque con todas las columnas, se calcula la importancia por permutación
+  (sklearn permutation_importance, n_repeats=5, sobre el train del fold) y se reajusta el bosque sobre
+  las top_k variables de mayor importancia. top_k se optimiza en el bucle interno en el rango [4, 10].
+- XGBoost (survival:cox): se ordena por importancia de ganancia (importance_type='gain'), se poda a
+  las top_k (rango [4, 10], optimizado en el interno) y se reajusta. El número de árboles se fija por
+  early stopping (25 rondas) en un hold-out del 20% del train, sobre las columnas seleccionadas.
+
+El diseño matricial tiene 10 columnas (6 numéricas mas 4 binarias one-hot drop-first), por lo que
+la poda opera sobre esas 10 columnas. Se registran por fold externo las variables seleccionadas, el
+número de variables y, en XGBoost, el número de árboles, para trazabilidad e interpretación.
+
+**Validación previa:** antes de la corrida reportada de 100 trials se ejecuta una pasada corta y no
+reportada (25 trials, solo OS) para confirmar el funcionamiento de extremo a extremo del pipeline
+anidado. Sus números no se publican en ningún entregable.
