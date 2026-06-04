@@ -298,7 +298,7 @@ const coverFields = [
   [null, "Salud"],
   ["Nombre del Tutor/a de TF", "Tutor del TFG"],
   ["Profesor/a responsable de la asignatura", "PRA del TFG"],
-  [null, "06/2026"],
+  [null, "06/06/2026"],
 ];
 coverFields.forEach(([label, value], i) => {
   const runs = label
@@ -331,7 +331,7 @@ A(table([
   ["Nombre del autor", "Alfonso Esteban Lasso"],
   ["Nombre del director (tutor)", "Tutor del TFG"],
   ["Nombre del PRA", "PRA del TFG"],
-  ["Fecha de entrega (mm/aaaa)", "06/2026"],
+  ["Fecha de entrega (mm/aaaa)", "06/06/2026"],
   ["Titulación o programa", "Grado en Ciencia de Datos Aplicada"],
   ["Área del Trabajo Final", "Salud"],
   ["Idioma del trabajo", "Castellano (con abstract en inglés)"],
