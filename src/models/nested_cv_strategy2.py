@@ -384,11 +384,13 @@ def outer_fit_predict(model_key, X_tr_outer, y_tr_outer, X_te_outer, y_te_outer,
 # Un modelo, un endpoint: validacion cruzada anidada completa
 # ---------------------------------------------------------------------------
 
-# Ejecuta la CV anidada de un modelo para un endpoint: bucle externo k=5, bucle
-# interno con Optuna (salvo el baseline, sin tuning), agregacion OOF, CV% y bootstrap.
-# Devuelve un diccionario de metricas listo para serializar.
-def run_model_endpoint(model_key, X_s1, X_s2, y, strata, global_times,
-                       outer_k, n_trials, inner_k, n_boot, logger):
+# Ejecuta el bucle EXTERNO completo de un modelo para un endpoint y devuelve las
+# predicciones OOF agregadas mas el detalle por fold. Es la pieza compartida por la
+# evaluacion estandar (run_model_endpoint) y por el test pareado (paired_test_strategy2),
+# de modo que ambos usan exactamente el mismo procedimiento y las mismas semillas.
+# Devuelve: fold_metrics, oof_risk, oof_surv, t_max_per_fold, sel_info.
+def run_outer_oof(model_key, X_s1, X_s2, y, strata, global_times,
+                  outer_k, n_trials, inner_k, logger):
     X, build_prep = model_inputs(model_key, X_s1, X_s2)
     outer_cv = StratifiedKFold(n_splits=outer_k, shuffle=True, random_state=SEED)
 
@@ -437,6 +439,18 @@ def run_model_endpoint(model_key, X_s1, X_s2, y, strata, global_times,
         fold_metrics.append({"fold": fold_i + 1, "c_index": c_index, "ibs": ibs})
         logger.info("  [%s] fold %d/%d: C-index=%.4f  IBS=%.4f",
                     model_key, fold_i + 1, outer_k, c_index, ibs)
+
+    return fold_metrics, oof_risk, oof_surv, t_max_per_fold, sel_info
+
+
+# Ejecuta la CV anidada de un modelo para un endpoint: bucle externo (run_outer_oof),
+# CV%, agregacion OOF y bootstrap. Devuelve un diccionario de metricas listo para serializar.
+def run_model_endpoint(model_key, X_s1, X_s2, y, strata, global_times,
+                       outer_k, n_trials, inner_k, n_boot, logger):
+    fold_metrics, oof_risk, oof_surv, t_max_per_fold, sel_info = run_outer_oof(
+        model_key, X_s1, X_s2, y, strata, global_times,
+        outer_k, n_trials, inner_k, logger,
+    )
 
     cv_c = [m["c_index"] for m in fold_metrics]
     cv_i = [m["ibs"] for m in fold_metrics]
@@ -502,6 +516,28 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+# Carga los dos datasets alineados por SUBJID: S2 (pool ampliado) para los modelos de
+# la Estrategia 2 y S1 (7 variables) para el baseline. SUBJID se lee como texto en ambos
+# para preservar el formato con ceros a la izquierda (read_csv lo inferiria como entero
+# y romperia la union). Devuelve (df_s2, df_s1) ya reindexados al mismo orden de sujeto.
+# Lanza FileNotFoundError o ValueError si falta un dataset o la alineacion falla.
+def load_aligned_datasets(logger: logging.Logger):
+    if not S2_DATASET.exists():
+        raise FileNotFoundError(f"No existe {S2_DATASET}. Ejecuta src/data/etl_strategy2.py.")
+    if not S1_DATASET.exists():
+        raise FileNotFoundError(f"No existe {S1_DATASET} (baseline). Ejecuta el ETL primario.")
+    df_s2 = pd.read_parquet(S2_DATASET)
+    df_s2["SUBJID"] = df_s2["SUBJID"].astype(str)
+    df_s2 = df_s2.sort_values("SUBJID").reset_index(drop=True)
+    df_s1 = pd.read_csv(S1_DATASET, dtype={"SUBJID": str})
+    df_s1 = df_s1.set_index("SUBJID").reindex(df_s2["SUBJID"]).reset_index()
+    n_unmatched = int(df_s1[S1_FEATURES].isna().all(axis=1).sum())
+    if n_unmatched > 0:
+        raise ValueError(f"{n_unmatched} sujetos S1 no se alinearon con S2 por SUBJID.")
+    logger.info("Datasets alineados: S2 %d filas, S1 %d filas.", len(df_s2), len(df_s1))
+    return df_s2, df_s1
+
+
 # Punto de entrada. Carga ambos datasets alineados por SUBJID (S2 para los modelos
 # del pool ampliado, S1 para el baseline), comparte los mismos folds externos y ejecuta
 # la CV anidada de cada modelo y endpoint. Reporta el delta de C-index frente al baseline.
@@ -510,25 +546,11 @@ def main() -> int:
     logger = setup_logger()
     np.random.seed(SEED)
 
-    if not S2_DATASET.exists():
-        logger.error("No existe %s. Ejecuta primero src/data/etl_strategy2.py.", S2_DATASET)
+    try:
+        df_s2, df_s1 = load_aligned_datasets(logger)
+    except (FileNotFoundError, ValueError) as exc:
+        logger.error("%s", exc)
         return 1
-    if not S1_DATASET.exists():
-        logger.error("No existe %s (necesario para el baseline). Ejecuta el ETL primario.", S1_DATASET)
-        return 1
-
-    # SUBJID se lee como texto en ambos para preservar el formato con ceros a la
-    # izquierda (p.ej. '000001'); read_csv lo inferiria como entero y romperia la union.
-    df_s2 = pd.read_parquet(S2_DATASET)
-    df_s2["SUBJID"] = df_s2["SUBJID"].astype(str)
-    df_s2 = df_s2.sort_values("SUBJID").reset_index(drop=True)
-    df_s1 = pd.read_csv(S1_DATASET, dtype={"SUBJID": str})
-    df_s1 = df_s1.set_index("SUBJID").reindex(df_s2["SUBJID"]).reset_index()
-    n_unmatched = int(df_s1[S1_FEATURES].isna().all(axis=1).sum())
-    if n_unmatched > 0:
-        logger.error("%d sujetos S1 no se alinearon con S2 por SUBJID. Revisa los datasets.", n_unmatched)
-        return 1
-    logger.info("Datasets alineados: S2 %d filas, S1 %d filas.", len(df_s2), len(df_s1))
 
     endpoints = [e.strip() for e in args.endpoints.split(",") if e.strip()]
     models = [m.strip() for m in args.models.split(",") if m.strip()]

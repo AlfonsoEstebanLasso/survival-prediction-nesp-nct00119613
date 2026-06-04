@@ -497,3 +497,59 @@ número de variables y, en XGBoost, el número de árboles, para trazabilidad e 
 **Validación previa:** antes de la corrida reportada de 100 trials se ejecuta una pasada corta y no
 reportada (25 trials, solo OS) para confirmar el funcionamiento de extremo a extremo del pipeline
 anidado. Sus números no se publican en ningún entregable.
+
+### Resultados de la Estrategia 2 y test pareado de significación
+
+**Fecha:** 2026-06-03. **Alcance:** resultados reales de la corrida anidada de 100 trials
+(output/strategy2_nested_metrics.json) y del test pareado de la diferencia de C-index
+(output/strategy2_paired_test.json, src/models/paired_test_strategy2.py).
+
+**Resultados anidados (bootstrap n=1000), C-index con IC95% e IBS:**
+
+| Endpoint | Modelo | C-index (IC95%) | delta vs baseline | IBS | CV% |
+|----------|--------|-----------------|-------------------|-----|-----|
+| OS  | baseline 7 var       | 0.5990 [0.567, 0.629] | referencia | 0.1817 | 7.05 |
+| OS  | Cox elastic-net 10 v | 0.6133 [0.581, 0.644] | +0.0143    | 0.1789 | 7.81 |
+| OS  | RSF 10 var           | 0.5961 [0.568, 0.624] | -0.0030    | 0.1809 | 9.03 |
+| OS  | XGBoost 10 var       | 0.5730 [0.546, 0.603] | -0.0260    | 0.1848 | 4.88 |
+| PFS | baseline 7 var       | 0.5551 [0.525, 0.586] | referencia | 0.1816 | 5.05 |
+| PFS | Cox elastic-net 10 v | 0.5790 [0.547, 0.610] | +0.0239    | 0.1799 | 3.43 |
+| PFS | RSF 10 var           | 0.5454 [0.512, 0.576] | -0.0097    | 0.1841 | 3.31 |
+| PFS | XGBoost 10 var       | 0.5459 [0.517, 0.577] | -0.0092    | 0.1828 | 8.51 |
+
+El mejor modelo de la Estrategia 2 es el Cox elastic-net en ambos endpoints (mejor C-index e IBS que
+RSF y XGBoost, y estable). RSF y XGBoost no mejoran al baseline, lo que refuerza el hallazgo del
+primario de que la superficie pronóstica es casi lineal en esta cohorte. La selección embebida del
+Cox elastic-net retiene casi todo el pool (8 a 10 de 10 por fold); las dos señales nuevas LDH (B_LDHN)
+y EPO (B_SEREPO) se seleccionan en los 5 folds de ambos endpoints, mientras que la transfusión (PRTFN,
+prevalencia 1.3%) es la menos retenida (3 a 4 de 5), como se anticipó.
+
+**Test pareado (operacionalización de la evaluación de significación).** El contraste pareado de la
+diferencia de C-index sobre las predicciones OOF es la forma correcta y más potente de comparar dos
+modelos; sustituye al argumento conservador del solapamiento de intervalos marginales. NO es un
+cambio del criterio pre-registrado (C-index + IBS + estabilidad): es la operacionalización rigurosa de
+ese mismo criterio. Se restringe deliberadamente al contraste que importa, Cox elastic-net frente al
+baseline, en OS (primario) y PFS (secundario). No se testean los seis contrastes: RSF y XGBoost ya
+muestran que no mejoran y multiplicar contrastes inflaría los falsos positivos.
+
+| Endpoint | delta (coxnet - baseline) | IC95% pareado | P(delta>0) | Veredicto |
+|----------|---------------------------|---------------|------------|-----------|
+| OS (primario)    | +0.0142 | [-0.0081, +0.0357] | 0.879 | IC incluye 0: sin mejora significativa |
+| PFS (secundario) | +0.0239 | [+0.0007, +0.0462] | 0.981 | IC excluye 0 (al límite): mejora pequeña detectable |
+
+**Lectura honesta (marco invariante).** En el endpoint primario (OS) no hay mejora significativa: el
+IC pareado incluye el cero, lo que constituye una base rigurosa para "sin mejora significativa", más
+sólida que el solapamiento de intervalos. En el endpoint secundario (PFS) hay una mejora pequeña y
+detectable, pero al límite (el extremo inferior del IC es +0.0007, prácticamente cero), que se reporta
+como hallazgo EXPLORATORIO, no como un resultado primario pre-registrado, de tamaño modesto (+0.024) y
+atribuible a las variables nuevas LDH y EPO. En ambos endpoints el efecto es pequeño. El modelo final
+del TFG sigue siendo el Cox del primario; el aporte de la Estrategia 2 es metodológico (un esquema de
+validación anidada sin sesgo de selección, con selección embebida e hiperparámetros en el bucle
+interno), no un modelo mejor. No se interpreta el +0.014 de OS ni el +0.024 de PFS como "se encontró
+un modelo mejor".
+
+**KPI-3 (mejora sobre baseline).** Sigue sin cumplirse en el endpoint primario: el análisis ampliado
+no produce una mejora significativa en OS. Matiza pero no revierte el hallazgo del primario.
+
+**Reproducibilidad.** El test pareado reutiliza run_outer_oof con las mismas semillas, por lo que las
+predicciones OOF y los C-index por fold reproducen exactamente los de la corrida larga reportada.
