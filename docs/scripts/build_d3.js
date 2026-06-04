@@ -421,7 +421,7 @@ A(table([
   ["7", "Redacción y transparencia", "Memoria y TRIPOD+AI", "D3, D4"],
   ["8", "Cierre", "Entorno limpio, release y defensa", "D1, D5"],
 ]));
-A(tableCaption("Planificación por sprints y entregas (PEC). La entrega final corresponde a la PEC4 (02/06/2026)."));
+A(tableCaption("Planificación por sprints y entregas (PEC). La entrega final corresponde a la PEC4 (06/06/2026)."));
 A(pc("La planificación contempla de forma explícita las actividades no técnicas (redacción de la memoria y elaboración de la presentación y la defensa), concentradas en los sprints 7 y 8. Incorpora además un análisis de riesgos con medidas mitigadoras y correctivas, registrado en el plan de trabajo inicial (D0) y mantenido durante el proyecto. La Tabla 3 recoge los riesgos principales, su probabilidad e impacto cualitativos y la mitigación adoptada. Es relevante que varios de estos riesgos se materializaron y se gestionaron mediante las decisiones registradas en el Decision log: en particular, los pivotes P1 (reformulación a supervivencia ante la incompletitud de las etiquetas de respuesta) y P2 (validación cruzada con bootstrap ante el tamaño muestral) responden a riesgos previstos, no a desviaciones imprevistas."));
 A(table([
   ["Riesgo", "Prob.", "Impacto", "Mitigación / acción correctiva", "Estado"],
@@ -558,7 +558,7 @@ A(pc("El supuesto de proporcionalidad de riesgos se verificó con el test de Sch
 A(...figureBlock("fig_schoenfeld_OS.png", "Residuos de Schoenfeld en OS. AGE y B_WEIGHT muestran tendencia temporal (violación del supuesto de proporcionalidad)."));
 
 A(h2("3.5 Robustez y subgrupos"));
-A(pc("El rendimiento del modelo final se analizó por subgrupos, con estadísticas bootstrap calculadas sobre cada estrato por separado. Las Tablas 8 y 9 recogen el C-index con su intervalo de confianza y el IBS para OS y PFS, respectivamente."));
+A(pc("El rendimiento del modelo final se analizó por subgrupos, con estadísticas bootstrap calculadas sobre cada estrato por separado. Las Tablas 8 y 9 recogen el C-index con su intervalo de confianza y el IBS para OS y PFS, respectivamente. La fila Global de estas tablas recomputa el bootstrap sobre el conjunto completo de forma independiente del de la Tabla 6, por lo que su intervalo de confianza y su IBS pueden diferir de aquella en la última cifra decimal (por ejemplo, IBS de 0.181 frente a 0.182); ambas estimaciones son consistentes y la diferencia es atribuible al remuestreo."));
 function subRows(rows) {
   return rows.map((r) => [
     r.Subgrupo, r.n, r.n_eventos,
