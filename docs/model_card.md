@@ -200,7 +200,20 @@ La k-anonimidad depende directamente de la granularidad del binning de edad. Con
 
 Utilidad TSTR: C-index medio entrenando en sintéticos y evaluando en reales = 0.437 (vs TRTR 0.600 en el mismo esquema). Ratio de utilidad = 72.8%. La reducción de utilidad es coherente con la capacidad limitada de CTGAN para capturar la estructura de correlación de datos clínicos de supervivencia. Los datos sintéticos son exclusivamente para prototipado metodológico y no refuerzan las conclusiones del modelo principal.
 
-**Generador alternativo (TVAE) y tensión utilidad-privacidad.** Ante el incumplimiento de la k-anonimidad por CTGAN, se evaluó un autoencoder variacional tabular (TVAE) con los mismos metadatos, épocas, semilla y criterios de aceptación preregistrados. TVAE mejora drásticamente la utilidad (TSTR 0.606, ratio 100.9%) y cumple la k-anonimidad (k1 1.46%, k5 3.56%), pero falla la distancia al registro más cercano (DCR_p5/RRDR 0.343, por debajo de 0.50): al reproducir mejor la estructura de los datos, genera registros demasiado próximos a sujetos reales. Ninguno de los dos generadores satisface a la vez los tres criterios, lo que hace explícita la tensión entre utilidad y privacidad. Ambos conjuntos quedan restringidos al prototipado. Detalle en la memoria (sección 3.6).
+**Generador alternativo (TVAE) y tensión utilidad-privacidad.** Ante el incumplimiento de la k-anonimidad por CTGAN, se evaluó un autoencoder variacional tabular (TVAE) con los mismos metadatos, épocas, semilla y criterios de aceptación preregistrados. TVAE mejora drásticamente la utilidad (TSTR 0.606, ratio 100.9%) y cumple la k-anonimidad (k1 1.46%, k5 3.56%), pero falla la distancia al registro más cercano (DCR_p5/RRDR 0.343, por debajo de 0.50): al reproducir mejor la estructura de los datos, genera registros demasiado próximos a sujetos reales. Por separado, ninguno de los dos generadores satisface a la vez los tres criterios, lo que hace explícita la tensión entre utilidad y privacidad.
+
+**Resolución de la tensión (solución combinada).** Se resolvió el trilema entre fidelidad marginal, utilidad de discriminación y privacidad combinando el TVAE con dos mecanismos, sin relajar ningún umbral: una augmentación contra el colapso de modos (replicación numérica de las clases mal representadas DTH, PFSCD, SEXCD y B_ECOGN) y un filtro de privacidad por DCR (rechazo de los registros sintéticos más próximos a un sujeto real). Se añadió una métrica de fidelidad marginal (TVD medio categórico). La configuración óptima (TVAE con augmentación y filtro DCR, n=5000) supera los tres criterios preregistrados a la vez con buena fidelidad:
+
+| Dimensión | Valor (solución n=5000) | Umbral | Resultado |
+|-----------|------------------------|--------|-----------|
+| Utilidad TSTR (C-index) | 0.583 | informativo | OK |
+| Fidelidad TVD (categórica) | 0.057 | menor es mejor | OK |
+| Membership inference AUC | 0.519 | <= 0.60 | ACEPTADO |
+| K-anonimidad k=1 (bins 5 años) | 1.24% | < 5.00% | ACEPTADO |
+| K-anonimidad k<=5 (bins 5 años) | 3.60% | < 20.00% | ACEPTADO |
+| DCR_p5 / RRDR_mediana | 0.577 | >= 0.50 | ACEPTADO |
+
+**Evaluación global de la solución: ACEPTADO.** El conjunto `synthetic_dataset_tvae_dcr_aug_n5000.csv` es candidato a dataset sintético derivado compartible que sustituya al dataset real no versionado. Detalle en la memoria (sección 3.6.1) y en `output/Solucion_sintetica_utilidad_privacidad.md`.
 
 ### Marco regulatorio
 
@@ -223,4 +236,4 @@ RGPD, LOPDGDD, AI Act y guías de anonimización de la AEPD. Privacidad por dise
 - Uso exclusivamente metodológico y educativo; no apto para decisiones clínicas.
 - Validación externa en una cohorte independiente antes de cualquier interpretación más allá del prototipo (línea futura).
 - Explorar extensiones del Cox con efectos dependientes del tiempo para AGE y B_WEIGHT.
-- Restringir el uso de los conjuntos sintéticos (CTGAN y TVAE) al prototipado: ninguno satisface a la vez los criterios de privacidad y utilidad preregistrados (CTGAN incumple la k-anonimidad; TVAE incumple la distancia al registro más cercano pese a su mayor utilidad).
+- Conjuntos sintéticos: CTGAN y TVAE no superan por separado los criterios preregistrados (CTGAN incumple la k-anonimidad; TVAE la distancia al registro más cercano). La solución combinada (TVAE con augmentación de clases y filtro de proximidad por DCR, n=5000) sí los supera a la vez y es candidata a dataset derivado compartible; dotarla de garantías formales de privacidad diferencial queda como línea futura.

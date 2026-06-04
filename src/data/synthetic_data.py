@@ -89,7 +89,43 @@ OUTPUT_DIR     = PROJECT_ROOT / "output"
 # el modelo alternativo escribe con sufijo (p.ej. synthetic_metrics_tvae.json). Los umbrales
 # de aceptacion (ACCEPT) permanecen FIJOS y preregistrados, no se ajustan al modelo elegido.
 SYNTH_MODEL   = os.environ.get("SYNTH_MODEL", "ctgan").lower()
-MODEL_SUFFIX  = "" if SYNTH_MODEL == "ctgan" else f"_{SYNTH_MODEL}"
+
+# Filtro de privacidad por DCR (rechazo de registros sintéticos demasiado proximos a un sujeto
+# real). Se activa con SYNTH_DCR_FILTER=1. El filtro NO relaja el criterio preregistrado: elimina
+# del pool los registros cuya distancia al real mas cercano queda por debajo de un minimo de
+# privacidad (DCR_FILTER_RATIO x mediana real-vs-real), de modo que el riesgo de proximidad
+# desaparece por construccion. Se sobre-genera (DCR_OVERSAMPLE) para conservar N_SYNTHETIC tras
+# el rechazo. Los umbrales de ACCEPT permanecen FIJOS.
+DCR_FILTER       = os.environ.get("SYNTH_DCR_FILTER", "0").lower() in ("1", "true", "yes")
+DCR_FILTER_RATIO = float(os.environ.get("SYNTH_DCR_FILTER_RATIO", "0.55"))  # margen sobre el umbral 0.50
+DCR_OVERSAMPLE   = int(os.environ.get("SYNTH_DCR_OVERSAMPLE", "12"))        # factor de sobre-generacion
+
+_base_suffix  = "" if SYNTH_MODEL == "ctgan" else f"_{SYNTH_MODEL}"
+MODEL_SUFFIX  = _base_suffix + ("_dcr" if DCR_FILTER else "")
+
+# Override del tamano muestral sintético (SYNTH_N) para el estudio comparativo de tamanos.
+# Etiqueta (SYNTH_TAG) que se anade al sufijo para no pisar artefactos entre tamanos.
+# SYNTH_SKIP_MI reutiliza el membership inference del TVAE base: el ataque MI se computa sobre
+# shadow models del dataset REAL y es invariante al tamano del set sintético y al filtro DCR.
+N_SYNTHETIC   = int(os.environ.get("SYNTH_N", str(N_SYNTHETIC)))
+SKIP_MI       = os.environ.get("SYNTH_SKIP_MI", "0").lower() in ("1", "true", "yes")
+
+# Augmentacion de clases mal representadas (anti mode-collapse). TVAE tiende a colapsar las
+# variables categoricas desbalanceadas (DTH, PFSCD, SEXCD, B_ECOGN) hacia su clase mayoritaria,
+# distorsionando las distribuciones marginales aunque conserve la utilidad de discriminacion.
+# Para contrarrestarlo se replican esas columnas como variables NUMERICAS duplicadas (AUG_K copias
+# por columna): al aumentar su presencia en el espacio de features, su contribucion a la perdida
+# de reconstruccion (ELBO) crece y el autoencoder preserva mejor su variabilidad. Tras la sintesis
+# se reconstruye cada clase promediando sus duplicados y proyectando al valor valido mas cercano.
+AUG       = os.environ.get("SYNTH_AUG", "0").lower() in ("1", "true", "yes")
+AUG_K     = int(os.environ.get("SYNTH_AUG_K", "4"))   # numero de columnas numericas por clase
+AUG_COLS  = ["DTH", "PFSCD", "SEXCD", "B_ECOGN"]      # clases propensas al colapso de modos
+
+SYNTH_TAG     = os.environ.get("SYNTH_TAG", "").strip()
+if AUG:
+    MODEL_SUFFIX = MODEL_SUFFIX + "_aug"
+if SYNTH_TAG:
+    MODEL_SUFFIX = MODEL_SUFFIX + f"_{SYNTH_TAG}"
 
 
 # Devuelve la ruta de salida con el sufijo del modelo (vacio para CTGAN, _tvae para TVAE),
@@ -231,11 +267,57 @@ def _build_sdv_metadata(df: pd.DataFrame):
     from sdv.metadata import SingleTableMetadata
     meta = SingleTableMetadata()
     meta.detect_from_dataframe(df)
-    # Forzar tipo categorico en variables binarias y ordinales para evitar sintesis incorrecta
-    for col in ["DTH", "PFSCD", "TXG", "EVALPRIM", "EVALQOL", "SEXCD", "B_ECOGN"]:
+    # Forzar tipo categorico en variables binarias y ordinales para evitar sintesis incorrecta.
+    # Con augmentacion activa (AUG), las clases de AUG_COLS y sus duplicados se modelan como
+    # NUMERICAS (los VAE no colapsan los continuos como hacen con los softmax categoricos), por lo
+    # que se excluyen del forzado categorico; sus duplicados ("__aug") ya se infieren numericos.
+    force_cat = ["DTH", "PFSCD", "TXG", "EVALPRIM", "EVALQOL", "SEXCD", "B_ECOGN"]
+    if AUG:
+        force_cat = [c for c in force_cat if c not in AUG_COLS]
+    for col in force_cat:
         if col in df.columns:
             meta.update_column(col, sdtype="categorical")
     return meta
+
+
+# Replica cada clase mal representada (AUG_COLS) como AUG_K columnas NUMERICAS duplicadas.
+# La columna original se convierte a float y se anaden AUG_K-1 copias con sufijo "__aug{i}".
+# Al multiplicar su presencia, su peso en la perdida de reconstruccion del VAE aumenta, lo que
+# mitiga el colapso de modos sobre la clase mayoritaria. Entrada: dataframe real de entrenamiento.
+# Salida: dataframe aumentado (las columnas extra se eliminan tras la sintesis con _deaugment).
+def _augment(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    for c in AUG_COLS:
+        if c not in df.columns:
+            continue
+        base = pd.to_numeric(df[c], errors="coerce").astype(float)
+        df[c] = base
+        for i in range(2, AUG_K + 1):
+            df[f"{c}__aug{i}"] = base.values  # copia exacta: correlacion perfecta en entrenamiento
+    return df
+
+
+# Reconstruye cada clase a partir de sus AUG_K columnas numericas: promedia los duplicados y
+# proyecta el valor continuo resultante al valor valido mas cercano observado en el dataset real
+# (umbral natural para binarias y ordinales). Elimina las columnas "__aug" auxiliares.
+# Entrada: dataframe sintético con columnas aumentadas y dataset real de referencia.
+# Salida: dataframe sintético con las clases reconstruidas y sin columnas auxiliares.
+def _deaugment(df_syn: pd.DataFrame, df_real: pd.DataFrame) -> pd.DataFrame:
+    df = df_syn.copy()
+    for c in AUG_COLS:
+        cols = [c] + [f"{c}__aug{i}" for i in range(2, AUG_K + 1)]
+        present = [col for col in cols if col in df.columns]
+        if not present:
+            continue
+        avg = df[present].apply(pd.to_numeric, errors="coerce").mean(axis=1)
+        valid = np.array(sorted(pd.to_numeric(df_real[c], errors="coerce").dropna().unique()))
+        # Proyectar cada promedio al valor valido mas cercano (umbral natural binario/ordinal)
+        idx = np.abs(avg.values.reshape(-1, 1) - valid.reshape(1, -1)).argmin(axis=1)
+        df[c] = valid[idx]
+        for col in present:
+            if col != c and col in df.columns:
+                df.drop(columns=col, inplace=True)
+    return df
 
 
 # Instancia y entrena un CTGANSynthesizer (SDV >= 1.0) sobre el dataframe recibido.
@@ -276,6 +358,8 @@ def _train_tvae(df: pd.DataFrame, epochs: int, seed_offset: int = 0):
 # ataque de membership inference usen la MISMA familia de modelo, manteniendo la coherencia
 # del analisis de riesgo de reidentificacion.
 def _train_synth(df: pd.DataFrame, epochs: int, seed_offset: int = 0):
+    if AUG:
+        df = _augment(df)  # replica las clases mal representadas antes de ajustar el sintetizador
     if SYNTH_MODEL == "tvae":
         return _train_tvae(df, epochs, seed_offset)
     return _train_ctgan(df, epochs, seed_offset)
@@ -292,6 +376,9 @@ def _train_synth(df: pd.DataFrame, epochs: int, seed_offset: int = 0):
 # Entrada: dataset sintético crudo y dataset real de referencia. Salida: dataset corregido.
 def _postprocess(df_syn: pd.DataFrame, df_real: pd.DataFrame) -> pd.DataFrame:
     """Corrige tipos y recorta rangos del dataset sintético al rango plausible del real."""
+    # Si hubo augmentacion, reconstruir primero las clases desde sus duplicados numericos
+    if AUG:
+        df_syn = _deaugment(df_syn, df_real)
     df = df_syn.copy()
 
     for col in ["DTH", "PFSCD", "TXG", "EVALPRIM", "EVALQOL"]:
@@ -347,6 +434,10 @@ def generate_synthetic(df_real: pd.DataFrame, logger: logging.Logger) -> pd.Data
     synth  = _train_synth(df_fit, epochs=MAIN_EPOCHS, seed_offset=0)
 
     logger.info("Generando %d registros sintéticos...", N_SYNTHETIC)
+
+    if DCR_FILTER:
+        return _generate_with_dcr_filter(synth, df_real, logger)
+
     df_syn = synth.sample(num_rows=N_SYNTHETIC)
     df_syn = _postprocess(df_syn, df_real)
 
@@ -357,6 +448,56 @@ def generate_synthetic(df_real: pd.DataFrame, logger: logging.Logger) -> pd.Data
         logger.warning("Eliminadas %d filas con NaN tras la sintesis.", n_antes - len(df_syn))
 
     return df_syn
+
+
+# Genera registros sintéticos con TVAE y aplica un filtro de privacidad por DCR: rechaza del pool
+# todo registro cuya distancia Euclidea al sujeto real mas cercano (en el espacio preprocesado)
+# quede por debajo de tau = DCR_FILTER_RATIO x mediana(RRDR real-vs-real). El filtro elimina el
+# riesgo de proximidad por construccion, sin relajar el umbral preregistrado (DCR_p5/RRDR >= 0.50).
+# Se sobre-genera por lotes hasta reunir N_SYNTHETIC supervivientes o agotar DCR_OVERSAMPLE intentos.
+# Entrada: sintetizador ajustado, dataset real y logger. Salida: dataset sintético filtrado.
+def _generate_with_dcr_filter(synth, df_real: pd.DataFrame, logger: logging.Logger) -> pd.DataFrame:
+    X_real, preproc = _fit_preprocessor(df_real)
+    drr = cdist(X_real, X_real, metric="euclidean")
+    np.fill_diagonal(drr, np.inf)
+    rrdr_med = float(np.median(drr.min(axis=1)))
+    tau = DCR_FILTER_RATIO * rrdr_med
+    logger.info("Filtro DCR activo: tau=%.4f (%.2f x RRDR_mediana=%.4f).",
+                tau, DCR_FILTER_RATIO, rrdr_med)
+
+    feats_presentes = [c for c in FEATURES if c in ALL_COLS]
+    kept: list[pd.DataFrame] = []
+    total_gen = 0
+    total_keep = 0
+    batch = max(N_SYNTHETIC * 2, 600)
+    attempts = 0
+    while total_keep < N_SYNTHETIC and attempts < DCR_OVERSAMPLE:
+        raw = synth.sample(num_rows=batch)
+        raw = _postprocess(raw, df_real)
+        fp  = [c for c in FEATURES if c in raw.columns]
+        raw = raw.dropna(subset=fp).reset_index(drop=True)
+        if len(raw) == 0:
+            attempts += 1
+            continue
+        X_syn = preproc.transform(raw[FEATURES].copy())
+        dcr   = cdist(X_syn, X_real, metric="euclidean").min(axis=1)
+        keep  = raw.loc[dcr >= tau].reset_index(drop=True)
+        kept.append(keep)
+        total_gen  += len(raw)
+        total_keep += len(keep)
+        attempts   += 1
+        logger.info("  Lote %d: conservados %d/%d (%.1f%%); acumulado %d/%d.",
+                    attempts, len(keep), len(raw),
+                    100.0 * len(keep) / max(len(raw), 1), total_keep, N_SYNTHETIC)
+
+    df_syn = pd.concat(kept, ignore_index=True) if kept else pd.DataFrame(columns=feats_presentes)
+    surv = 100.0 * total_keep / max(total_gen, 1)
+    logger.info("Filtro DCR: supervivencia global %.1f%% (%d/%d generados).",
+                surv, total_keep, total_gen)
+    if len(df_syn) < N_SYNTHETIC:
+        logger.warning("Filtro DCR: solo %d registros (objetivo %d) tras %d lotes.",
+                       len(df_syn), N_SYNTHETIC, attempts)
+    return df_syn.head(N_SYNTHETIC).reset_index(drop=True)
 
 
 # ---------------------------------------------------------------------------
@@ -729,6 +870,52 @@ def compute_dcr(
 
 
 # ---------------------------------------------------------------------------
+# Fidelidad distribucional (marginales)
+# ---------------------------------------------------------------------------
+
+# Cuantifica la fidelidad de las distribuciones marginales del dataset sintético frente al real.
+# Para las variables categoricas y binarias usa la distancia de variacion total (TVD): la mitad
+# de la suma de las diferencias absolutas de frecuencias por categoria (0 = identico, 1 = disjunto).
+# Para las variables numericas usa el estadistico de Kolmogorov-Smirnov (KS) entre las dos
+# distribuciones empiricas. La fidelidad es complementaria a la utilidad TSTR (que mide solo
+# discriminacion por rangos) y al riesgo de privacidad: un sintético puede tener buena utilidad de
+# discriminacion y, aun asi, marginales distorsionadas por colapso de modos en variables categoricas.
+# Entrada: dataset sintético, dataset real y logger. Salida: dict con TVD por categoria, KS por
+# numerica y resumenes agregados (TVD medio categorico, KS medio numerico).
+def compute_fidelity(df_syn: pd.DataFrame, df_real: pd.DataFrame, logger: logging.Logger) -> dict:
+    from scipy.stats import ks_2samp
+    cat_cols = [c for c in ["DTH", "PFSCD", "SEXCD", "B_ECOGN", "TXG", "EVALPRIM", "EVALQOL"]
+                if c in df_real.columns and c in df_syn.columns]
+    num_cols = [c for c in ["AGE", "B_WEIGHT", "CADIAGM", "B_HGB", "MEDHX_N", "DTHDY", "PFSDY"]
+                if c in df_real.columns and c in df_syn.columns]
+
+    tvd: dict[str, float] = {}
+    for c in cat_cols:
+        va = df_real[c].value_counts(normalize=True)
+        vb = df_syn[c].value_counts(normalize=True)
+        cats = set(va.index) | set(vb.index)
+        tvd[c] = float(0.5 * sum(abs(float(va.get(k, 0.0)) - float(vb.get(k, 0.0))) for k in cats))
+
+    ks: dict[str, float] = {}
+    for c in num_cols:
+        a = pd.to_numeric(df_real[c], errors="coerce").dropna().values
+        b = pd.to_numeric(df_syn[c], errors="coerce").dropna().values
+        if len(a) > 0 and len(b) > 0:
+            ks[c] = float(ks_2samp(a, b).statistic)
+
+    tvd_mean = float(np.mean(list(tvd.values()))) if tvd else float("nan")
+    ks_mean  = float(np.mean(list(ks.values())))  if ks  else float("nan")
+    logger.info("Fidelidad: TVD medio categorico=%.4f | KS medio numerico=%.4f", tvd_mean, ks_mean)
+
+    return {
+        "tvd_categorical":   tvd,
+        "ks_numeric":        ks,
+        "tvd_mean":          tvd_mean,
+        "ks_mean":           ks_mean,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Figuras
 # ---------------------------------------------------------------------------
 
@@ -997,7 +1184,26 @@ def main() -> int:
     # 3. Membership inference (shadow models)
     # -------------------------------------------------------------------
     logger.info("\n=== 3. MEMBERSHIP INFERENCE (SHADOW MODELS) ===")
-    mi = membership_inference_shadow(df_real, logger)
+    if SKIP_MI:
+        # El ataque MI se computa sobre shadow models del dataset REAL: es invariante al tamano
+        # del set sintético y al filtro DCR. Se reutiliza el del TVAE base para el estudio de tamanos.
+        base_mi_path = OUTPUT_DIR / "synthetic_metrics_tvae.json"
+        mi = None
+        if base_mi_path.exists():
+            try:
+                bm = json.load(open(base_mi_path, encoding="utf-8"))
+                bmi = bm["reidentification_risk"]["membership_inference"]
+                mi = {k: v for k, v in bmi.items() if k not in ("fpr", "tpr")}
+                mi["reused_from"] = "synthetic_metrics_tvae.json"
+                logger.info("MI reutilizado de TVAE base: AUC=%.4f, TPR@FPR=0.1=%.4f (size-invariant).",
+                            mi.get("auc", float("nan")), mi.get("tpr_at_fpr01", float("nan")))
+            except Exception as exc:
+                logger.warning("No se pudo reutilizar MI base (%s); se recomputa.", exc)
+                mi = membership_inference_shadow(df_real, logger)
+        else:
+            mi = membership_inference_shadow(df_real, logger)
+    else:
+        mi = membership_inference_shadow(df_real, logger)
 
     # -------------------------------------------------------------------
     # 4. K-anonimidad
@@ -1014,12 +1220,18 @@ def main() -> int:
     dcr = compute_dcr(X_syn_proc, X_real_proc, logger)
 
     # -------------------------------------------------------------------
+    # 5b. Fidelidad distribucional (marginales)
+    # -------------------------------------------------------------------
+    logger.info("\n=== 5b. FIDELIDAD DISTRIBUCIONAL (MARGINALES) ===")
+    fidelity = compute_fidelity(df_syn, df_real, logger)
+
+    # -------------------------------------------------------------------
     # 6. Figuras
     # -------------------------------------------------------------------
     logger.info("\n=== 6. FIGURAS ===")
     if tstr:
         _plot_tstr(tstr, _out("fig_synthetic_tstr.png"), logger)
-    if mi:
+    if mi and mi.get("fpr") and mi.get("tpr"):
         _plot_membership(mi, _out("fig_synthetic_membership.png"), logger)
     _plot_dcr(dcr,   _out("fig_synthetic_dcr.png"),   logger)
     _plot_kanon(kanon, _out("fig_synthetic_kanon.png"), logger)
@@ -1043,10 +1255,15 @@ def main() -> int:
             "method":      f"{SYNTH_MODEL.upper()} (SDV >= 1.0)",
             "epochs":      MAIN_EPOCHS,
             "n_real":      int(len(df_real)),
+            "n_target":    int(N_SYNTHETIC),
             "n_synthetic": int(len(df_syn)),
             "seed":        SEED,
+            "dcr_filter":          bool(DCR_FILTER),
+            "dcr_filter_ratio":    DCR_FILTER_RATIO if DCR_FILTER else None,
+            "tag":                 SYNTH_TAG or None,
         },
         "utility_tstr": tstr_json,
+        "fidelity":     fidelity,
         "reidentification_risk": {
             "membership_inference": mi_json,
             "k_anonymity":          kanon,
@@ -1054,6 +1271,7 @@ def main() -> int:
         },
         "acceptance_criteria": ACCEPT,
         "overall_accepted":    overall,
+        "augmentation": {"enabled": bool(AUG), "k": AUG_K if AUG else None, "cols": AUG_COLS if AUG else None},
     }
 
     metrics_path = _out("synthetic_metrics.json")

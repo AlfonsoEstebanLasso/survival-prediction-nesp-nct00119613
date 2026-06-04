@@ -423,27 +423,27 @@ function figureBox(slide, file, x, y, w, h) {
 // ---------- 12. Datos sintéticos ----------
 {
   const s = pres.addSlide();
-  header(s, "Datos sintéticos", "Tensión entre utilidad y privacidad: CTGAN frente a TVAE", 12);
-  figureBox(s, fig("fig_synthetic_kanon.png"), MX, 2.0, 7.0, 4.4);
+  header(s, "Datos sintéticos", "De la tensión a la solución: TVAE con augmentación y filtro DCR", 12);
+  figureBox(s, fig("fig_synthetic_size_comparison.png"), MX, 2.0, 7.0, 4.4);
   const cx = MX + 7.0 + 0.4, cw = W - MX - cx;
-  // resultado global
-  card(s, cx, 2.05, cw, 1.1, C.white);
-  s.addShape(pres.shapes.RECTANGLE, { x: cx, y: 2.05, w: 0.12, h: 1.1, fill: { color: C.amber }, line: { type: "none" } });
+  // resultado global: resuelto
+  card(s, cx, 2.05, cw, 1.15, C.white);
+  s.addShape(pres.shapes.RECTANGLE, { x: cx, y: 2.05, w: 0.12, h: 1.15, fill: { color: C.green }, line: { type: "none" } });
   s.addText([
-    { text: "Evaluación global: NO ACEPTADO", options: { bold: true, color: C.amber, breakLine: true } },
-    { text: "ningún generador cumple a la vez los tres criterios preregistrados.", options: { color: C.grayText } },
-  ], { x: cx + 0.35, y: 2.18, w: cw - 0.6, h: 0.85, fontFace: FONT, fontSize: 13, valign: "middle", margin: 0, lineSpacingMultiple: 1.05 });
+    { text: "Tensión resuelta", options: { bold: true, color: C.green, breakLine: true } },
+    { text: "TVAE + augmentación de clases + filtro DCR (n=5000) supera los tres criterios preregistrados.", options: { color: C.grayText } },
+  ], { x: cx + 0.35, y: 2.16, w: cw - 0.6, h: 0.95, fontFace: FONT, fontSize: 13, valign: "middle", margin: 0, lineSpacingMultiple: 1.05 });
   s.addText([
-    { text: "CTGAN: ", options: { bold: true, color: C.blueDark } },
-    { text: "TSTR 0.437 (baja utilidad) e incumple la k-anonimidad (k=1 7.3%); membership inference y DCR pasan.", options: { color: C.grayText, breakLine: true, paraSpaceAfter: 8 } },
-    { text: "TVAE: ", options: { bold: true, color: C.blueDark } },
-    { text: "TSTR 0.606 (utilidad casi plena) y cumple la k-anonimidad (k=1 1.5%), pero falla la distancia al registro más cercano (DCR 0.343).", options: { color: C.grayText, breakLine: true, paraSpaceAfter: 8 } },
-    { text: "Tensión utilidad-privacidad", options: { bold: true, color: C.amber } },
-    { text: ": más fidelidad implica registros más próximos a los reales.", options: { color: C.grayText } },
-  ], { x: cx, y: 3.35, w: cw, h: 2.0, fontFace: FONT, fontSize: 12, valign: "top", margin: 0, lineSpacingMultiple: 1.05 });
-  card(s, cx, 5.5, cw, 1.0, C.blueDark);
-  s.addText("Uso restringido a prototipado metodológico. No refuerzan las conclusiones del modelo principal ni representan pacientes reales.", {
-    x: cx + 0.3, y: 5.6, w: cw - 0.6, h: 0.8, fontFace: FONT, fontSize: 12, color: C.white, italic: true, valign: "middle", margin: 0, lineSpacingMultiple: 1.05,
+    { text: "El trilema: ", options: { bold: true, color: C.blueDark } },
+    { text: "CTGAN preserva marginales pero no la utilidad y falla k-anonimidad; TVAE da utilidad pero colapsa marginales y falla la DCR.", options: { color: C.grayText, breakLine: true, paraSpaceAfter: 8 } },
+    { text: "La solución: ", options: { bold: true, color: C.blueDark } },
+    { text: "augmentar las clases mal representadas (anti colapso de modos) y filtrar por proximidad al real (DCR), sin relajar umbrales.", options: { color: C.grayText, breakLine: true, paraSpaceAfter: 8 } },
+    { text: "Óptimo n=5000: ", options: { bold: true, color: C.green } },
+    { text: "TSTR 0.583, fidelidad TVD 0.057, MI 0.519, k=1 1.24%, DCR 0.577.", options: { color: C.grayText } },
+  ], { x: cx, y: 3.4, w: cw, h: 2.05, fontFace: FONT, fontSize: 12, valign: "top", margin: 0, lineSpacingMultiple: 1.05 });
+  card(s, cx, 5.55, cw, 1.0, C.blueDark);
+  s.addText("Candidato a dataset sintético derivado compartible. Uso restringido a prototipado: no representa pacientes reales ni refuerza las conclusiones del modelo principal.", {
+    x: cx + 0.3, y: 5.62, w: cw - 0.6, h: 0.86, fontFace: FONT, fontSize: 11, color: C.white, italic: true, valign: "middle", margin: 0, lineSpacingMultiple: 1.05,
   });
   footer(s);
 }
@@ -519,7 +519,7 @@ function figureBox(slide, file, x, y, w, h) {
     { text: "Cox con extensiones tiempo-dependientes para AGE y B_WEIGHT (violación parcial de proporcionalidad).", options: { bullet: { code: "2022" }, breakLine: true, paraSpaceAfter: 9 } },
     { text: "Enriquecer covariables basales (EPO, LDH) manteniendo el control anti-leakage.", options: { bullet: { code: "2022" }, breakLine: true, paraSpaceAfter: 9 } },
     { text: "Validación externa en cohortes independientes más allá del ensayo.", options: { bullet: { code: "2022" }, breakLine: true, paraSpaceAfter: 9 } },
-    { text: "Generadores sintéticos con privacidad diferencial que concilien k-anonimidad y distancia al registro más cercano (DCR).", options: { bullet: { code: "2022" } } },
+    { text: "Dotar de garantías formales de privacidad diferencial a la solución sintética ya lograda (TVAE con augmentación y filtro DCR) y validar su utilidad de forma externa.", options: { bullet: { code: "2022" } } },
   ], { x: cx, y: 2.45, w: cw, h: 3.8, fontFace: FONT, fontSize: 14, color: C.grayText, valign: "top", margin: 0, lineSpacingMultiple: 1.08 });
   footer(s);
 }

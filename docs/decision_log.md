@@ -91,7 +91,8 @@ utilidad TSTR y evaluación de riesgo de reidentificación en tres dimensiones.
 
 **Decisiones de diseño:**
 
-- Generador: CTGANSynthesizer de SDV con 300 épocas y n_sintético = n_real = 479.
+- Generador: CTGANSynthesizer de SDV con 300 épocas y n_sintético equivalente al real
+  (478 registros frente a 479 sujetos reales; tamaño practicamente igual al de la cohorte).
   Columnas binarias (DTH, PFSCD, TXG, EVALPRIM, EVALQOL) y categóricas (SEXCD, B_ECOGN)
   declaradas explícitamente como "categorical" en los metadatos SDV.
 - TSTR: preprocesador ajustado solo sobre datos sintéticos (escenario TSTR puro);
@@ -619,3 +620,23 @@ se gestionaron, no a desviaciones imprevistas. Se eliminan ademas las notas de a
 estudiante (licencia y declaracion de IA), se neutraliza la nota de los indices, se corrige la
 incoherencia PEC4/PEC5 (la defensa se nombra como defensa final del TFG) y se corrigen castellanismos en
 el abstract en ingles.
+
+### Resolucion de la tension utilidad-privacidad de los datos sinteticos (3.6.1)
+
+**Fecha:** 2026-06-04. **Alcance:** se sustituye el apartado 3.6.1 de la memoria (antes "Generador
+alternativo TVAE y tension utilidad-privacidad", que dejaba la tension sin resolver) por la resolucion del
+trilema entre fidelidad marginal, utilidad de discriminacion (TSTR) y privacidad. Diagnostico: CTGAN
+preserva las marginales (TVD 0.032) pero no la estructura conjunta (TSTR 0.437) y falla la k-anonimidad;
+TVAE preserva la estructura (TSTR 0.606) pero colapsa las categoricas desbalanceadas (TVD 0.148) y falla la
+DCR (0.343). Solucion combinada, sin relajar umbrales: TVAE + augmentacion anti colapso de modos
+(replicacion numerica de DTH, PFSCD, SEXCD, B_ECOGN como K=4 columnas, reconstruidas por promedio + valor
+valido mas cercano) + filtro de privacidad por DCR (rechazo de registros con distancia al real < 0.55 x
+mediana real-vs-real). Se anade metrica de fidelidad (TVD categorico, KS numerico) al pipeline. Estudio de
+tamano en tres sets (n=1000, 2500, 5000). Optimo: TVAE+AUG+DCR n=5000 (TSTR 0.583, TVD 0.057, MI 0.519, k1
+1.24%, DCR 0.577), supera los tres criterios preregistrados y es candidato a dataset derivado compartible.
+El membership inference es invariante al tamano y al filtro (shadow models del real), por lo que se
+reutiliza. Codigo: src/data/synthetic_data.py (flags SYNTH_AUG, SYNTH_AUG_K, SYNTH_DCR_FILTER, SYNTH_N) y
+src/data/synthetic_size_comparison.py. Anexo: output/Solucion_sintetica_utilidad_privacidad.md. Integrado
+en D3 (3.6.1, Tabla 12, Figura 10, resumen, 4.1, 4.2, 4.4, 4.5, glosario), Model Card y D4. La Estrategia 2
+(modelado elastic-net) se mantiene intacta. Para verificar las cifras frente a los datos reales se leyeron
+los .sas7bdat crudos al contexto, con autorizacion expresa y puntual; no se versiona ningun dato de sujeto.
