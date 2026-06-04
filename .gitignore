@@ -6,6 +6,9 @@ SAS_dataset/
 # Documentos fuente de Project Data Sphere (terminos de uso: NUNCA versionar)
 references/
 
+# Carpeta temporal de extraccion de Project Data Sphere (protocolo, CRF y datos SAS crudos: NUNCA versionar)
+_pds_tmp/
+
 # Dataset derivado a nivel de sujeto (no versionar)
 *_dataset.csv
 *_dataset.parquet
