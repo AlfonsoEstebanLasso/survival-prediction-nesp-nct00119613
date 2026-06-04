@@ -10,7 +10,7 @@ Documento vivo desde el Sprint 3, cerrado en el Sprint 8 con los valores reales 
 - Endpoints modelados: supervivencia global OS (variables DTH, DTHDY) y supervivencia libre de progresión PFS (variables PFSCD, PFSDY), codificados con 1 = evento y 0 = censura.
 - Autor: Alfonso Esteban Lasso ([email-eliminado]). Tutor: Tutor del TFG.
 - Contexto: Trabajo Final del Grado en Ciencia de Datos Aplicada (UOC). Prototipo de investigación, no dispositivo clínico.
-- Entorno y reproducibilidad: Python 3.12.4; lifelines 0.30.3; scikit-survival 0.27.0; scikit-learn 1.8.0; xgboost 3.2.0; lightgbm 4.6.0; pandas 2.3.3; numpy 2.4.6. Semilla global fija (SEED = 42). Versiones congeladas en environment.yml; reproducibilidad verificada en entorno limpio (KPI-1).
+- Entorno y reproducibilidad: Python 3.12.4; lifelines 0.30.3; scikit-survival 0.27.0; scikit-learn 1.8.0; xgboost 3.2.0; lightgbm 4.6.0; pandas 2.3.3; numpy 2.4.6; optuna (optimización de hiperparámetros); sdv (Synthetic Data Vault: CTGAN y TVAE); scipy (contrastes y distancias); matplotlib (figuras). Generación de documentos con Node: librería docx (D3 y D4) y pptxgenjs (D5). Semilla global fija (SEED = 42). Versiones congeladas en environment.yml; reproducibilidad verificada en entorno limpio (KPI-1).
 - Licencia: Reconocimiento-NoComercial-SinObraDerivada 3.0 España de Creative Commons (CC BY-NC-ND 3.0 ES).
 - Cómo citar: Esteban Lasso, A. (2026). Predicción de respuesta a fármacos quimioterapéuticos a partir de datos clínicos anonimizados (Trabajo Final de Grado). Universitat Oberta de Catalunya.
 
