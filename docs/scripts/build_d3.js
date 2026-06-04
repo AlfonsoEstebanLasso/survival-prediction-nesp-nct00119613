@@ -576,6 +576,29 @@ A(noteBox([
    run("los datos sintéticos son exclusivamente para prototipado metodológico. No representan pacientes reales, no refuerzan las conclusiones del modelo principal y no deben usarse con fines clínicos ni epidemiologicos.", { size: 20 })],
 ]));
 
+// ----------------------------------------------------------------------------
+// 3.7 Análisis ampliado (Estrategia 2), exploratorio. Valores reales de
+// output/strategy2_nested_metrics.json y output/strategy2_paired_test.json,
+// registrados en el decision log (entradas de la Estrategia 2).
+// ----------------------------------------------------------------------------
+A(h2("3.7 Análisis ampliado: Estrategia 2 (exploratorio)"));
+A(pc("Como complemento exploratorio al pipeline primario, y sin sustituirlo, se evaluo si ampliar el conjunto de covariables basales y optimizar la selección de características y los hiperparámetros mediante validación cruzada anidada mejora el rendimiento pronóstico sin sesgo de selección. El protocolo se pre-registro por escrito antes de ejecutar ningún modelado."));
+A(pc("Se construyo un dataset derivado propio de 10 covariables basales o pre-aleatorización: las 7 del primario, con el peso sustituido por el índice de masa corporal, más la EPO sérica basal (transformada con log1p), el LDH basal (normal o anormal, factor de estratificación de la aleatorización) y la transfusión previa al tratamiento. El esquema fue una validación cruzada anidada: un bucle externo k=5 para la estimación de rendimiento sin sesgo y un bucle interno k=5 donde se confinaron la selección embebida (penalización L1 en Cox, poda por importancia de permutación en Random Survival Forest y de ganancia en XGBoost) y el ajuste de hiperparámetros con Optuna (100 iteraciones por modelo y fold). El Cox elastic-net, el Random Survival Forest y el XGBoost se compararon contra el baseline de 7 variables ejecutado bajo el mismo protocolo anidado."));
+A(table([
+  ["Endpoint", "Modelo", "C-index (IC95%)", "IBS", "CV%"],
+  ["OS", "Baseline 7 var", "0.599 [0.567, 0.629]", "0.182", "7.1"],
+  ["OS", "Cox elastic-net 10 var", "0.613 [0.581, 0.644]", "0.179", "7.8"],
+  ["OS", "RSF 10 var", "0.596 [0.568, 0.624]", "0.181", "9.0"],
+  ["OS", "XGBoost 10 var", "0.573 [0.546, 0.603]", "0.185", "4.9"],
+  ["PFS", "Baseline 7 var", "0.555 [0.525, 0.586]", "0.182", "5.1"],
+  ["PFS", "Cox elastic-net 10 var", "0.579 [0.547, 0.610]", "0.180", "3.4"],
+  ["PFS", "RSF 10 var", "0.545 [0.512, 0.576]", "0.184", "3.3"],
+  ["PFS", "XGBoost 10 var", "0.546 [0.517, 0.577]", "0.183", "8.5"],
+], { aligns: [AlignmentType.LEFT, AlignmentType.LEFT, AlignmentType.CENTER, AlignmentType.CENTER, AlignmentType.CENTER] }));
+A(tableCaption("Estrategia 2: rendimiento anidado por endpoint y modelo (C-index con IC95% bootstrap, IBS y coeficiente de variación entre folds)."));
+A(pc("El mejor modelo de la Estrategia 2 fue el Cox elastic-net en ambos endpoints; el Random Survival Forest y el XGBoost no mejoraron al baseline, lo que refuerza el carácter casi lineal de la superficie pronóstica en esta cohorte. La selección embebida retuvo casi todo el pool, y las dos señales nuevas, LDH y EPO, se seleccionaron en los cinco folds de ambos endpoints. El contraste de significación se operacionalizo con un bootstrap pareado de la diferencia de C-index sobre las predicciones out-of-fold, restringido a la comparación relevante (Cox elastic-net frente a baseline). En el endpoint primario (OS) la diferencia fue +0.014 con IC95% [-0.008, +0.036], que incluye el cero: no hay mejora significativa. En el secundario (PFS) fue +0.024 con IC95% [+0.001, +0.046]; el intervalo excluye el cero, pero por un margen mínimo (límite inferior +0.001) y en un endpoint de discriminación intrínsecamente débil. Es un resultado en el umbral de la significación y frágil, que proviene además de uno de dos contrastes, por lo que se reporta como hallazgo exploratorio y no como evidencia robusta de mejora."));
+A(pc("En conjunto, el efecto es pequeño, sin significación en el primario y solo en el umbral en el secundario, y el KPI-3 sigue sin cumplirse en el endpoint primario. El modelo final del trabajo continúa siendo el Cox del pipeline primario; el aporte de la Estrategia 2 es metodológico (un esquema de validación anidada sin sesgo de selección, con selección embebida e hiperparámetros confinados al bucle interno), no un modelo de mayor rendimiento."));
+
 // ============================================================================
 // 4. CONCLUSIONES
 // ============================================================================
@@ -732,6 +755,27 @@ A(table([
   ["C6", "2.6 y D1 (implementacion con tecnologías digitales)", "Sólida"],
 ], { aligns: RA_ALIGNS }));
 A(tableCaption("Trazabilidad de las competencias (C) a las secciones y entregables del TFG."));
+
+A(h2("7.5 Análisis ampliado (Estrategia 2): protocolo y resultados"));
+A(pc("Este anexo detalla el análisis ampliado y exploratorio de la sección 3.7. Su protocolo se pre-registro por escrito en el registro de decisiones antes de ejecutar ningún modelado, conforme a la buena práctica de fijar el pool de variables, el método de selección, el espacio de búsqueda y el criterio de comparación antes de observar resultados. El análisis es adicional al primario, que permanece intacto con sus artefactos, sus hashes y su verificación en entorno limpio (KPI-1)."));
+A(pc("El pool de 10 covariables candidatas, todas basales o pre-aleatorización y sin fuga, fue: edad, índice de masa corporal (derivado del peso y la altura), tiempo desde el diagnóstico, hemoglobina basal, EPO sérica basal (con log1p), número de sistemas con comorbilidad, sexo, ECOG basal, LDH basal y transfusión previa. Se excluyeron las variables constantes por varianza cero o por criterio de inclusión, los ficheros de laboratorio longitudinales (por ser post-basales; el LDH y la EPO basales ya están resumidos como variables de cribado), las categorizaciones redundantes y los flags administrativos. El preprocesado (imputación adaptativa, log1p de la EPO antes de escalar, estandarización y codificación) se ajusto solo en el train de cada partición, dentro del esquema anidado."));
+A(pc("La selección de características y el ajuste de hiperparámetros se confinaron al bucle interno. La selección es embebida: penalización L1 en el Cox elastic-net (las variables retenidas son las de coeficiente no nulo) y poda por importancia (de permutación en Random Survival Forest, de ganancia en XGBoost) reajustando el modelo sobre las variables de mayor importancia, con el número de variables retenidas optimizado en el bucle interno. El bucle externo k=5 proporciono la estimación de rendimiento sin sesgo mediante predicciones out-of-fold con bootstrap n=1000."));
+A(pc("La tabla siguiente muestra cuántos de los cinco folds externos retuvieron cada variable en el Cox elastic-net, el mejor modelo de la Estrategia 2. Las dos señales nuevas, LDH y EPO, se seleccionaron en los cinco folds de ambos endpoints; la transfusión previa, de prevalencia muy baja (1.3 por ciento), fue la menos retenida, como se anticipo."));
+A(table([
+  ["Variable", "OS (folds /5)", "PFS (folds /5)"],
+  ["Edad", "4", "5"],
+  ["Índice de masa corporal", "5", "5"],
+  ["Tiempo desde el diagnóstico", "5", "5"],
+  ["Hemoglobina basal", "5", "4"],
+  ["EPO sérica basal", "5", "5"],
+  ["Comorbilidad (n. de sistemas)", "5", "5"],
+  ["Sexo", "5", "5"],
+  ["ECOG basal", "5", "5"],
+  ["LDH basal", "5", "5"],
+  ["Transfusión previa", "3", "4"],
+], { aligns: [AlignmentType.LEFT, AlignmentType.CENTER, AlignmentType.CENTER] }));
+A(tableCaption("Frecuencia de selección de cada variable por el Cox elastic-net en los 5 folds externos, por endpoint."));
+A(pc("Los artefactos de la Estrategia 2 (dataset derivado propio con su hash SHA-256 de referencia, diccionario, manifiesto, métricas anidadas y resultado del test pareado) se generan con los scripts de extracción y de validación cruzada anidada del repositorio, en paralelo a los del primario y sin modificarlos. El dataset a nivel de sujeto no se versiona por privacidad por diseño; solo se publican metadatos."));
 
 // ============================================================================
 // DOCUMENTO

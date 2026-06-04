@@ -470,10 +470,40 @@ function figureBox(slide, file, x, y, w, h) {
   footer(s);
 }
 
-// ---------- 14. Conclusiones y líneas futuras ----------
+// ---------- 14. Análisis ampliado (Estrategia 2) ----------
 {
   const s = pres.addSlide();
-  header(s, "Conclusiones y líneas futuras", "Aportación y siguientes pasos", 14);
+  header(s, "Análisis ampliado (Estrategia 2)", "Validación cruzada anidada: mejora pequeña y no concluyente", 14);
+  const bw = 6.3;
+  s.addText("Diseño", { x: MX, y: 2.0, w: bw, h: 0.4, fontFace: FONT, fontSize: 16, color: C.blueDark, bold: true, margin: 0 });
+  s.addText([
+    { text: "Validación cruzada anidada: selección de variables e hiperparámetros en el bucle interno, sin sesgo de selección.", options: { bullet: { code: "2022" }, breakLine: true, paraSpaceAfter: 9 } },
+    { text: "Pool ampliado de 10 covariables basales: anade LDH, EPO, índice de masa corporal y transfusión previa.", options: { bullet: { code: "2022" }, breakLine: true, paraSpaceAfter: 9 } },
+    { text: "Cox elastic-net, RSF y XGBoost frente al baseline de 7 variables, bajo el mismo protocolo anidado.", options: { bullet: { code: "2022" } } },
+  ], { x: MX, y: 2.45, w: bw, h: 3.0, fontFace: FONT, fontSize: 13.5, color: C.grayText, valign: "top", margin: 0, lineSpacingMultiple: 1.08 });
+
+  const cx = MX + bw + 0.5, cw = W - MX - cx;
+  s.addText("Resultado", { x: cx, y: 2.0, w: cw, h: 0.4, fontFace: FONT, fontSize: 16, color: C.blueDark, bold: true, margin: 0 });
+  s.addText([
+    { text: "OS (primario): ", options: { bold: true, color: C.blueDark } },
+    { text: "sin mejora significativa (+0.014, IC95% [-0.008, +0.036]).", options: { color: C.grayText, breakLine: true, paraSpaceAfter: 10 } },
+    { text: "PFS (secundario): ", options: { bold: true, color: C.amber } },
+    { text: "+0.024, en el umbral de la significación y frágil.", options: { color: C.grayText, breakLine: true, paraSpaceAfter: 10 } },
+    { text: "RSF y XGBoost: ", options: { bold: true, color: C.blueDark } },
+    { text: "no mejoran al baseline. LDH y EPO se seleccionan en todos los folds.", options: { color: C.grayText } },
+  ], { x: cx, y: 2.45, w: cw, h: 3.0, fontFace: FONT, fontSize: 13.5, valign: "top", margin: 0, lineSpacingMultiple: 1.08 });
+
+  card(s, MX, 5.7, W - 2 * MX, 0.95, C.blueDark);
+  s.addText("Confirma la robustez del primario. Aporte metodológico, no un modelo mejor.", {
+    x: MX + 0.3, y: 5.8, w: W - 2 * MX - 0.6, h: 0.75, fontFace: FONT, fontSize: 13.5, color: C.white, italic: true, valign: "middle", margin: 0, lineSpacingMultiple: 1.05,
+  });
+  footer(s);
+}
+
+// ---------- 15. Conclusiones y líneas futuras ----------
+{
+  const s = pres.addSlide();
+  header(s, "Conclusiones y líneas futuras", "Aportación y siguientes pasos", 15);
   const bw = 6.5;
   s.addText("Conclusiones", { x: MX, y: 2.0, w: bw, h: 0.4, fontFace: FONT, fontSize: 16, color: C.blueDark, bold: true, margin: 0 });
   s.addText([

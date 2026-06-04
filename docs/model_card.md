@@ -93,6 +93,8 @@ Detalle por fold (OS): fold 1 = 0.528, fold 2 = 0.614, fold 3 = 0.635, fold 4 = 
 
 **KPI-3 (mejora sobre baseline): NO CUMPLIDO.** Los IC bootstrap de RSF y Cox solapan completamente (diferencia C-index = 0.007). Con n=479 y 7 predictores basales, la superficie de decisión es prácticamente lineal y los modelos no lineales no tienen ventaja en esta cohorte. Se documenta como limitación explícita.
 
+**Análisis ampliado exploratorio (Estrategia 2).** Una validación cruzada anidada con un pool de 10 covariables basales y selección embebida e hiperparámetros confinados al bucle interno no produjo una mejora significativa sobre el baseline en el endpoint primario (OS: diferencia de C-index +0.014, IC95% pareado [-0.008, +0.036]); en PFS la mejora fue pequeña, al límite de la significación y frágil. Refuerza que el modelo final (Cox del primario) es adecuado; el aporte es metodológico. Detalle en el registro de decisiones y en la memoria (sección 3.7 y anexo 7.5).
+
 ### Coeficientes y hazard ratios (Cox proporcional)
 
 #### OS
@@ -210,7 +212,7 @@ RGPD, LOPDGDD, AI Act y guías de anonimización de la AEPD. Privacidad por dise
 - Tamaño muestral moderado (n=479).
 - Predictores basales únicamente, por control anti-leakage.
 - Variables de tipo tumoral, extensión y clase de quimioterapia invariantes por los criterios de inclusión del protocolo, y raza de varianza cero observada: todas constantes en la cohorte y excluidas.
-- KPI-3 no cumplido: RSF y XGBoost no mejoran significativamente al Cox proporcional.
+- KPI-3 no cumplido: RSF y XGBoost no mejoran significativamente al Cox proporcional. El análisis ampliado exploratorio (Estrategia 2, validación cruzada anidada con 10 covariables) tampoco logra una mejora significativa en OS; en PFS la mejora es pequeña, al límite de la significación y frágil. El aporte es metodológico.
 - Violación parcial del supuesto de proporcionalidad en AGE (OS) y B_WEIGHT (OS y PFS) según test de Schoenfeld.
 - Alta tasa de eventos PFS (92%) limita la información de censura para estimación de la curva de supervivencia.
 
