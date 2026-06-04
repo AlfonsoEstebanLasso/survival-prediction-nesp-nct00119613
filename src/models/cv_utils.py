@@ -92,7 +92,15 @@ def safe_ibs(y_tr, y_te, surv_mat, fold_times) -> float:
     valid = y_te["time"] < y_tr["time"].max()
     if valid.sum() == 0 or len(fold_times) == 0:
         return float("nan")
-    return float(integrated_brier_score(y_tr, y_te[valid], surv_mat[valid], fold_times))
+    # Robustez ante folds degenerados: si la rejilla de tiempos cae fuera del seguimiento
+    # del subconjunto de test (puede ocurrir con folds muy pequenos), el estimador IPCW de
+    # integrated_brier_score lanza ValueError. Se degrada a NaN, que el nanmean posterior
+    # ya gestiona, en lugar de abortar toda la ejecucion. En el dato real (n=479, k=5) esta
+    # rama no se activa, por lo que el resultado del pipeline primario no varia.
+    try:
+        return float(integrated_brier_score(y_tr, y_te[valid], surv_mat[valid], fold_times))
+    except ValueError:
+        return float("nan")
 
 
 # ---------------------------------------------------------------------------
