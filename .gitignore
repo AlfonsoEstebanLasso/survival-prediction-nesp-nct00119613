@@ -41,6 +41,9 @@ package-lock.json
 docs/build/
 *.docx
 
+# Paquetes de entrega y estudio (no versionar)
+*.zip
+
 # Sistema operativo y editores
 .DS_Store
 Thumbs.db
