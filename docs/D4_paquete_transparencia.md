@@ -16,7 +16,7 @@ Se declara de entrada que este trabajo es un estudio de DESARROLLO de un modelo 
 
 Leyenda de estado: Cumplido (el item se aborda en D3), Parcial (se aborda de forma incompleta o con matices), No aplica (no procede por el alcance del estudio).
 
-El índice de la memoria D3 al que se hace referencia es: 1.1 contexto; 1.2 objetivos; 1.3 impacto CCEG; 1.4 enfoque; 1.5 planificacion; 1.6 productos; 1.7 otros capítulos; 1.8 declaración de IA; 2.1 datos y cohorte; 2.2 diseño y control de fugas; 2.3 modelos; 2.4 métricas; 2.5 privacidad y sintéticos; 2.6 reproducibilidad; 2.7 valoración económica; 3.1 comparativa y selección; 3.2 modelo final OS y PFS; 3.3 calibración; 3.4 interpretabilidad; 3.5 robustez y subgrupos; 3.6 datos sintéticos; 4.1 conclusiones; 4.2 objetivos; 4.3 planificacion; 4.4 impactos; 4.5 líneas futuras.
+El índice de la memoria D3 al que se hace referencia es: 1.1 contexto; 1.2 estado del arte; 1.3 objetivos; 1.4 impacto CCEG; 1.5 enfoque; 1.6 planificacion; 1.7 productos; 1.8 otros capítulos; 1.9 declaración de IA; 2.1 datos y cohorte; 2.2 diseño y control de fugas; 2.3 modelos; 2.4 métricas; 2.5 privacidad y sintéticos; 2.6 reproducibilidad; 2.7 valoración económica; 3.1 comparativa y selección; 3.2 modelo final OS y PFS; 3.3 calibración; 3.4 interpretabilidad; 3.5 robustez y subgrupos; 3.6 datos sintéticos; 4.1 conclusiones; 4.2 objetivos; 4.3 planificacion; 4.4 impactos; 4.5 líneas futuras.
 
 ### 1.2 Título y resumen
 
@@ -273,6 +273,8 @@ Evaluación global: NO ACEPTADO por k-anonimidad con la configuración de cuasi-
 Interpretación: la k-anonimidad depende directamente de la granularidad del binning de edad. Con la configuración preregistrada, un 7.3% de registros sintéticos coincide de forma única con al menos un real en el espacio de cuasi-identificadores, lo cual supera el umbral de protección. El membership inference y la DCR no muestran riesgo de identificación directa, lo que indica que el riesgo reside en la similitud estructural de las combinaciones de atributos, no en la copia literal de registros.
 
 Utilidad TSTR: C-index medio entrenando en sintéticos y evaluando en reales = 0.437 (vs TRTR 0.600 en el mismo esquema). Ratio de utilidad = 72.8%. La reducción de utilidad es coherente con la capacidad limitada de CTGAN para capturar la estructura de correlación de datos clínicos de supervivencia.
+
+Generador alternativo (TVAE) y tensión utilidad-privacidad: ante el incumplimiento de la k-anonimidad por CTGAN, se evaluó un autoencoder variacional tabular (TVAE) con los mismos metadatos, épocas, semilla y criterios preregistrados. TVAE mejora drásticamente la utilidad (TSTR 0.606, ratio 100.9%) y cumple la k-anonimidad (k1 1.46%, k5 3.56%), pero falla la distancia al registro más cercano (DCR_p5/RRDR 0.343, < 0.50): al reproducir mejor la estructura, genera registros demasiado próximos a sujetos reales. Ningún generador satisface a la vez los tres criterios; la tensión entre utilidad y privacidad queda explícita y ambos conjuntos se restringen al prototipado.
 
 Los datos sintéticos son exclusivamente para prototipado metodológico y no refuerzan las conclusiones del modelo principal. Marco regulatorio: RGPD, LOPDGDD, AI Act y guías de anonimizacion de la AEPD.
 

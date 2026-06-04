@@ -423,7 +423,7 @@ function figureBox(slide, file, x, y, w, h) {
 // ---------- 12. Datos sintéticos ----------
 {
   const s = pres.addSlide();
-  header(s, "Datos sintéticos", "Utilidad limitada y privacidad no garantizada", 12);
+  header(s, "Datos sintéticos", "Tensión entre utilidad y privacidad: CTGAN frente a TVAE", 12);
   figureBox(s, fig("fig_synthetic_kanon.png"), MX, 2.0, 7.0, 4.4);
   const cx = MX + 7.0 + 0.4, cw = W - MX - cx;
   // resultado global
@@ -431,16 +431,16 @@ function figureBox(slide, file, x, y, w, h) {
   s.addShape(pres.shapes.RECTANGLE, { x: cx, y: 2.05, w: 0.12, h: 1.1, fill: { color: C.amber }, line: { type: "none" } });
   s.addText([
     { text: "Evaluación global: NO ACEPTADO", options: { bold: true, color: C.amber, breakLine: true } },
-    { text: "por k-anonimidad con los cuasi-identificadores preregistrados.", options: { color: C.grayText } },
+    { text: "ningún generador cumple a la vez los tres criterios preregistrados.", options: { color: C.grayText } },
   ], { x: cx + 0.35, y: 2.18, w: cw - 0.6, h: 0.85, fontFace: FONT, fontSize: 13, valign: "middle", margin: 0, lineSpacingMultiple: 1.05 });
   s.addText([
-    { text: "TSTR = 0.437", options: { bold: true, color: C.blueDark } },
-    { text: " (por debajo de 0.5): el modelo entrenado en sintéticos no discrimina en reales. Ratio de utilidad 72.8%.", options: { color: C.grayText, breakLine: true, paraSpaceAfter: 8 } },
-    { text: "k=1 = 7.3%", options: { bold: true, color: C.blueDark } },
-    { text: " de registros sintéticos coincide de forma única con un real: supera el umbral de protección.", options: { color: C.grayText, breakLine: true, paraSpaceAfter: 8 } },
-    { text: "Membership inference y DCR", options: { bold: true, color: C.green } },
-    { text: " si pasan: no hay copia literal de registros.", options: { color: C.grayText } },
-  ], { x: cx, y: 3.35, w: cw, h: 2.0, fontFace: FONT, fontSize: 12.5, valign: "top", margin: 0, lineSpacingMultiple: 1.05 });
+    { text: "CTGAN: ", options: { bold: true, color: C.blueDark } },
+    { text: "TSTR 0.437 (baja utilidad) e incumple la k-anonimidad (k=1 7.3%); membership inference y DCR pasan.", options: { color: C.grayText, breakLine: true, paraSpaceAfter: 8 } },
+    { text: "TVAE: ", options: { bold: true, color: C.blueDark } },
+    { text: "TSTR 0.606 (utilidad casi plena) y cumple la k-anonimidad (k=1 1.5%), pero falla la distancia al registro más cercano (DCR 0.343).", options: { color: C.grayText, breakLine: true, paraSpaceAfter: 8 } },
+    { text: "Tensión utilidad-privacidad", options: { bold: true, color: C.amber } },
+    { text: ": más fidelidad implica registros más próximos a los reales.", options: { color: C.grayText } },
+  ], { x: cx, y: 3.35, w: cw, h: 2.0, fontFace: FONT, fontSize: 12, valign: "top", margin: 0, lineSpacingMultiple: 1.05 });
   card(s, cx, 5.5, cw, 1.0, C.blueDark);
   s.addText("Uso restringido a prototipado metodológico. No refuerzan las conclusiones del modelo principal ni representan pacientes reales.", {
     x: cx + 0.3, y: 5.6, w: cw - 0.6, h: 0.8, fontFace: FONT, fontSize: 12, color: C.white, italic: true, valign: "middle", margin: 0, lineSpacingMultiple: 1.05,
@@ -487,8 +487,8 @@ function figureBox(slide, file, x, y, w, h) {
   s.addText([
     { text: "OS (primario): ", options: { bold: true, color: C.blueDark } },
     { text: "sin mejora significativa (+0.014, IC95% [-0.008, +0.036]).", options: { color: C.grayText, breakLine: true, paraSpaceAfter: 10 } },
-    { text: "PFS (secundario): ", options: { bold: true, color: C.amber } },
-    { text: "+0.024, en el umbral de la significación y frágil.", options: { color: C.grayText, breakLine: true, paraSpaceAfter: 10 } },
+    { text: "PFS (secundario): ", options: { bold: true, color: C.blueDark } },
+    { text: "+0.024; aunque el IC pareado excluía el cero, tras corregir por multiplicidad (Holm y Bonferroni) no es significativo.", options: { color: C.grayText, breakLine: true, paraSpaceAfter: 10 } },
     { text: "RSF y XGBoost: ", options: { bold: true, color: C.blueDark } },
     { text: "no mejoran al baseline. LDH y EPO se seleccionan en todos los folds.", options: { color: C.grayText } },
   ], { x: cx, y: 2.45, w: cw, h: 3.0, fontFace: FONT, fontSize: 13.5, valign: "top", margin: 0, lineSpacingMultiple: 1.08 });
@@ -519,7 +519,7 @@ function figureBox(slide, file, x, y, w, h) {
     { text: "Cox con extensiones tiempo-dependientes para AGE y B_WEIGHT (violación parcial de proporcionalidad).", options: { bullet: { code: "2022" }, breakLine: true, paraSpaceAfter: 9 } },
     { text: "Enriquecer covariables basales (EPO, LDH) manteniendo el control anti-leakage.", options: { bullet: { code: "2022" }, breakLine: true, paraSpaceAfter: 9 } },
     { text: "Validación externa en cohortes independientes más allá del ensayo.", options: { bullet: { code: "2022" }, breakLine: true, paraSpaceAfter: 9 } },
-    { text: "Generadores sintéticos más robustos que superen la k-anonimidad preregistrada.", options: { bullet: { code: "2022" } } },
+    { text: "Generadores sintéticos con privacidad diferencial que concilien k-anonimidad y distancia al registro más cercano (DCR).", options: { bullet: { code: "2022" } } },
   ], { x: cx, y: 2.45, w: cw, h: 3.8, fontFace: FONT, fontSize: 14, color: C.grayText, valign: "top", margin: 0, lineSpacingMultiple: 1.08 });
   footer(s);
 }

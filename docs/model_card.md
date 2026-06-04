@@ -93,7 +93,7 @@ Detalle por fold (OS): fold 1 = 0.528, fold 2 = 0.614, fold 3 = 0.635, fold 4 = 
 
 **KPI-3 (mejora sobre baseline): NO CUMPLIDO.** Los IC bootstrap de RSF y Cox solapan completamente (diferencia C-index = 0.007). Con n=479 y 7 predictores basales, la superficie de decisión es prácticamente lineal y los modelos no lineales no tienen ventaja en esta cohorte. Se documenta como limitación explícita.
 
-**Análisis ampliado exploratorio (Estrategia 2).** Una validación cruzada anidada con un pool de 10 covariables basales y selección embebida e hiperparámetros confinados al bucle interno no produjo una mejora significativa sobre el baseline en el endpoint primario (OS: diferencia de C-index +0.014, IC95% pareado [-0.008, +0.036]); en PFS la mejora fue pequeña, al límite de la significación y frágil. Refuerza que el modelo final (Cox del primario) es adecuado; el aporte es metodológico. Detalle en el registro de decisiones y en la memoria (sección 3.7 y anexo 7.5).
+**Análisis ampliado exploratorio (Estrategia 2).** Una validación cruzada anidada con un pool de 10 covariables basales y selección embebida e hiperparámetros confinados al bucle interno no produjo una mejora significativa sobre el baseline en el endpoint primario (OS: diferencia de C-index +0.014, IC95% pareado [-0.008, +0.036]); en PFS, aunque el intervalo pareado excluía el cero por un margen mínimo, tras corregir por comparaciones múltiples (Holm y Bonferroni sobre los dos endpoints) ningún endpoint resulta significativo. Refuerza que el modelo final (Cox del primario) es adecuado; el aporte es metodológico. Detalle en el registro de decisiones y en la memoria (sección 3.7 y anexo 7.5).
 
 ### Coeficientes y hazard ratios (Cox proporcional)
 
@@ -200,6 +200,8 @@ La k-anonimidad depende directamente de la granularidad del binning de edad. Con
 
 Utilidad TSTR: C-index medio entrenando en sintéticos y evaluando en reales = 0.437 (vs TRTR 0.600 en el mismo esquema). Ratio de utilidad = 72.8%. La reducción de utilidad es coherente con la capacidad limitada de CTGAN para capturar la estructura de correlación de datos clínicos de supervivencia. Los datos sintéticos son exclusivamente para prototipado metodológico y no refuerzan las conclusiones del modelo principal.
 
+**Generador alternativo (TVAE) y tensión utilidad-privacidad.** Ante el incumplimiento de la k-anonimidad por CTGAN, se evaluó un autoencoder variacional tabular (TVAE) con los mismos metadatos, épocas, semilla y criterios de aceptación preregistrados. TVAE mejora drásticamente la utilidad (TSTR 0.606, ratio 100.9%) y cumple la k-anonimidad (k1 1.46%, k5 3.56%), pero falla la distancia al registro más cercano (DCR_p5/RRDR 0.343, por debajo de 0.50): al reproducir mejor la estructura de los datos, genera registros demasiado próximos a sujetos reales. Ninguno de los dos generadores satisface a la vez los tres criterios, lo que hace explícita la tensión entre utilidad y privacidad. Ambos conjuntos quedan restringidos al prototipado. Detalle en la memoria (sección 3.6).
+
 ### Marco regulatorio
 
 RGPD, LOPDGDD, AI Act y guías de anonimización de la AEPD. Privacidad por diseño y advertencia explícita de no uso clínico.
@@ -212,7 +214,7 @@ RGPD, LOPDGDD, AI Act y guías de anonimización de la AEPD. Privacidad por dise
 - Tamaño muestral moderado (n=479).
 - Predictores basales únicamente, por control anti-leakage.
 - Variables de tipo tumoral, extensión y clase de quimioterapia invariantes por los criterios de inclusión del protocolo, y raza de varianza cero observada: todas constantes en la cohorte y excluidas.
-- KPI-3 no cumplido: RSF y XGBoost no mejoran significativamente al Cox proporcional. El análisis ampliado exploratorio (Estrategia 2, validación cruzada anidada con 10 covariables) tampoco logra una mejora significativa en OS; en PFS la mejora es pequeña, al límite de la significación y frágil. El aporte es metodológico.
+- KPI-3 no cumplido: RSF y XGBoost no mejoran significativamente al Cox proporcional. El análisis ampliado exploratorio (Estrategia 2, validación cruzada anidada con 10 covariables) tampoco logra una mejora significativa: aunque en PFS el intervalo pareado excluía el cero por un margen mínimo, tras corregir por comparaciones múltiples (Holm y Bonferroni sobre OS y PFS) ningún endpoint supera al baseline. El aporte es metodológico.
 - Violación parcial del supuesto de proporcionalidad en AGE (OS) y B_WEIGHT (OS y PFS) según test de Schoenfeld.
 - Alta tasa de eventos PFS (92%) limita la información de censura para estimación de la curva de supervivencia.
 
@@ -221,4 +223,4 @@ RGPD, LOPDGDD, AI Act y guías de anonimización de la AEPD. Privacidad por dise
 - Uso exclusivamente metodológico y educativo; no apto para decisiones clínicas.
 - Validación externa en una cohorte independiente antes de cualquier interpretación más allá del prototipo (línea futura).
 - Explorar extensiones del Cox con efectos dependientes del tiempo para AGE y B_WEIGHT.
-- Restringir el uso del conjunto sintético al prototipado, dado que no supera el umbral de k-anonimidad preregistrado y su utilidad TSTR es baja.
+- Restringir el uso de los conjuntos sintéticos (CTGAN y TVAE) al prototipado: ninguno satisface a la vez los criterios de privacidad y utilidad preregistrados (CTGAN incumple la k-anonimidad; TVAE incumple la distancia al registro más cercano pese a su mayor utilidad).

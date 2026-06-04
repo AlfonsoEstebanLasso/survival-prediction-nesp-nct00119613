@@ -78,13 +78,13 @@ tests/             pruebas (smoke tests del pipeline)
 ## 10. Entregables y estado
 
 - D0 Plan de trabajo: completo.
-- D1 Repositorio del pipeline: ETL completo; faltan preprocesado, modelado, evaluacion, reporting y el release versionado.
+- D1 Repositorio del pipeline: completo (ETL, preprocesado, modelado, evaluacion, reporting y analisis de privacidad). Release versionado hecho (tag git) y KPI-1 verificado en entorno limpio el 2026-06-04 (hashes del ETL identicos a la referencia, 43 tests en verde).
 - D2 Dataset derivado, diccionario y reporte de calidad: completo.
-- D3 Memoria final: completo. Generada con valores reales del pipeline e incluye el anexo 7.4 (matriz de trazabilidad de resultados de aprendizaje) en `output/D3_Memoria_TFG_NESP.docx` (generador `docs/scripts/build_d3.js`). Pendiente manual: actualizar campos en Word (F9) y exportar a PDF.
+- D3 Memoria final: completo. Incluye estado del arte (1.2, con renumeracion de la introduccion), analisis de riesgos del proyecto (1.6), correccion por comparaciones multiples en la Estrategia 2 (Holm y Bonferroni, 3.7) y comparacion de generadores sinteticos CTGAN y TVAE con la tension utilidad-privacidad (3.6). Generada con valores reales en `output/D3_Memoria_TFG_NESP.docx` y exportada a PDF con Word. Generador `docs/scripts/build_d3.js`.
 - D4 Paquete de transparencia (TRIPOD+AI, Model Card final, analisis de riesgos): completo. Generado en `output/D4_paquete_transparencia.docx` (generador `docs/scripts/build_d4.js`); fuente viva en `docs/D4_paquete_transparencia.md` y `docs/model_card.md`. Pendiente manual: F9 y exportar a PDF.
 - D5 Presentacion y guion de defensa: completo. Presentacion en `output/D5_presentacion.pptx` (generador `docs/scripts/build_d5.js`, libreria pptxgenjs) y guion cronometrado a 20 minutos en `output/D5_guion.md`. Pendiente manual: grabar el video de la exposicion y exportar la presentacion a PDF.
 
-Sprints: 1 a 6 cerrados; Sprint 7 (redaccion y TRIPOD+AI) cerrado; Sprint 8 (entorno limpio, release y defensa) en curso, pendiente el release versionado de D1 y la grabacion del video. Entrega final PEC4: 02/06/2026.
+Sprints: 1 a 6 cerrados; Sprint 7 (redaccion y TRIPOD+AI) cerrado; Sprint 8 (entorno limpio, release y defensa) casi cerrado: release versionado de D1 hecho y KPI-1 verificado; pendiente solo la grabacion del video de defensa. Entrega final PEC4: 02/06/2026.
 
 KPIs: KPI-1 reproducibilidad, KPI-2 calidad de datos, KPI-3 rendimiento (mejora sobre baseline), KPI-4 calibracion, KPI-5 evaluacion etico-legal.
 

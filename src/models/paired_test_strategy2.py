@@ -93,14 +93,46 @@ def paired_bootstrap(y, risk_a, risk_b, n=N_BOOTSTRAP, seed=SEED) -> dict:
             continue
     deltas = np.array(deltas)
     ci_low, ci_high = float(np.percentile(deltas, 2.5)), float(np.percentile(deltas, 97.5))
+    # p-valor bootstrap. Una cola (H0: coxnet no mejora, delta <= 0) y dos colas.
+    p_one_sided = float(np.mean(deltas <= 0))
+    p_two_sided = min(1.0, float(2.0 * min(np.mean(deltas <= 0), np.mean(deltas >= 0))))
     return {
         "delta_point": _cindex(y, risk_a) - _cindex(y, risk_b),
         "delta_mean": float(np.mean(deltas)),
         "ci_low": ci_low,
         "ci_high": ci_high,
         "frac_gt_0": float(np.mean(deltas > 0)),
+        "p_one_sided": p_one_sided,
+        "p_two_sided": p_two_sided,
         "excludes_zero": bool(ci_low > 0 or ci_high < 0),
         "n_boot": int(len(deltas)),
+    }
+
+
+# Correccion por comparaciones multiples sobre los contrastes evaluados (OS y PFS).
+# Se evalua el mismo contraste relevante (coxnet vs baseline) en los dos endpoints: hay
+# m=2 tests. Se aplican Bonferroni (umbral conservador) y Holm-Bonferroni (control del FWER
+# menos conservador). Si ningun p ajustado baja de alpha, no hay mejora significativa tras
+# controlar la multiplicidad, lo que refuerza el veredicto de KPI-3 no cumplido.
+def multiplicity_adjust(p_by_contrast: dict, alpha: float = 0.05) -> dict:
+    items = list(p_by_contrast.items())
+    m = len(items)
+    bonf = {k: min(1.0, p * m) for k, p in items}
+    order = sorted(items, key=lambda kv: kv[1])  # Holm: p ascendente, factor (m-i) decreciente
+    holm, running = {}, 0.0
+    for i, (k, p) in enumerate(order):
+        running = max(running, min(1.0, p * (m - i)))  # monotonia no decreciente
+        holm[k] = running
+    return {
+        "contrasts": list(p_by_contrast.keys()),
+        "m_tests": m,
+        "alpha": alpha,
+        "p_raw": dict(p_by_contrast),
+        "p_bonferroni": bonf,
+        "p_holm": holm,
+        "significant_bonferroni": {k: bool(v < alpha) for k, v in bonf.items()},
+        "significant_holm": {k: bool(v < alpha) for k, v in holm.items()},
+        "any_significant": bool(any(v < alpha for v in holm.values())),
     }
 
 
@@ -137,8 +169,25 @@ def main() -> int:
         veredicto = ("mejora pequena DETECTABLE (IC excluye 0)" if pt["excludes_zero"]
                      else "sin mejora significativa (IC incluye 0)")
         logger.info("[%s] delta C-index (coxnet - baseline) = %+.4f  IC95%% [%+.4f, %+.4f]  "
-                    "P(delta>0)=%.3f  -> %s",
-                    ep, pt["delta_point"], pt["ci_low"], pt["ci_high"], pt["frac_gt_0"], veredicto)
+                    "P(delta>0)=%.3f  p2=%.3f  -> %s",
+                    ep, pt["delta_point"], pt["ci_low"], pt["ci_high"], pt["frac_gt_0"],
+                    pt["p_two_sided"], veredicto)
+
+    # Correccion por comparaciones multiples sobre los 2 contrastes (OS, PFS).
+    p_by_contrast = {ep: results[ep]["p_two_sided"] for ep in ("OS", "PFS")}
+    mult = multiplicity_adjust(p_by_contrast, alpha=0.05)
+    results["multiplicity"] = mult
+    logger.info("--- Correccion por comparaciones multiples (m=%d contrastes, alpha=0.05) ---",
+                mult["m_tests"])
+    for ep in ("OS", "PFS"):
+        logger.info("    %s: p_raw=%.4f  p_Holm=%.4f (%s)  p_Bonf=%.4f (%s)",
+                    ep, mult["p_raw"][ep], mult["p_holm"][ep],
+                    "sig" if mult["significant_holm"][ep] else "ns",
+                    mult["p_bonferroni"][ep],
+                    "sig" if mult["significant_bonferroni"][ep] else "ns")
+    logger.info("    Veredicto tras multiplicidad: %s",
+                "alguna mejora significativa" if mult["any_significant"]
+                else "ninguna mejora significativa (KPI-3 no cumplido reforzado)")
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     out_path = OUTPUT_DIR / "strategy2_paired_test.json"

@@ -553,3 +553,69 @@ no produce una mejora significativa en OS. Matiza pero no revierte el hallazgo d
 
 **Reproducibilidad.** El test pareado reutiliza run_outer_oof con las mismas semillas, por lo que las
 predicciones OOF y los C-index por fold reproducen exactamente los de la corrida larga reportada.
+
+### Correccion por comparaciones multiples en el test pareado de la Estrategia 2
+
+**Fecha:** 2026-06-04. **Alcance:** se anade al test pareado (src/models/paired_test_strategy2.py,
+output/strategy2_paired_test.json) la correccion por comparaciones multiples sobre los dos contrastes
+evaluados (Cox elastic-net frente a baseline en OS y en PFS).
+
+**Motivacion.** El mismo contraste se evalua en dos endpoints; sin correccion, el p de PFS al limite
+(IC pareado [+0.0007, +0.0462], que excluia el cero) podria leerse como evidencia de mejora. Para
+controlar la tasa de error por familia (FWER) se calculan el p-valor bootstrap a dos colas por endpoint
+y los p ajustados por Holm-Bonferroni y por Bonferroni (m=2, alfa=0.05).
+
+| Endpoint | p (2 colas) | p Holm | p Bonferroni | Significativo |
+|----------|-------------|--------|--------------|---------------|
+| OS  | 0.242 | 0.242 | 0.484 | No |
+| PFS | 0.038 | 0.076 | 0.076 | No |
+
+**Resultado.** Ningun endpoint resulta significativo tras la correccion: el p de PFS sube de 0.038 a
+0.076. Refuerza el veredicto de KPI-3 NO CUMPLIDO (ni en el primario ni en el ampliado). No cambia el
+criterio a priori; lo operacionaliza con mayor rigor estadistico. Documentado en la memoria (3.7 y 7.5),
+la Model Card y el D4.
+
+### Generador sintetico alternativo (TVAE) y tension utilidad-privacidad
+
+**Fecha:** 2026-06-04. **Alcance:** ante el incumplimiento de la k-anonimidad por CTGAN, se evalua un
+segundo generador (TVAESynthesizer de SDV) con los MISMOS metadatos, epocas (300), semilla (42) y
+criterios de aceptacion preregistrados, que NO se reajustan. Se anade soporte parametrico en
+src/data/synthetic_data.py (variable de entorno SYNTH_MODEL; salidas con sufijo _tvae para no pisar
+los artefactos de CTGAN: output/synthetic_metrics_tvae.json).
+
+| Metrica | CTGAN | TVAE | Umbral | 
+|---------|-------|------|--------|
+| TSTR (utilidad) | 0.437 (ratio 72.8%) | 0.606 (ratio 100.9%) | informativo |
+| Membership inference AUC | 0.534 (ok) | 0.519 (ok) | <= 0.60 |
+| k-anonimidad k=1 | 7.32% (no) | 1.46% (ok) | < 5% |
+| k-anonimidad k<=5 | 20.71% (no) | 3.56% (ok) | < 20% |
+| DCR_p5 / RRDR | 0.622 (ok) | 0.343 (no) | >= 0.50 |
+| Global | NO ACEPTADO | NO ACEPTADO | todos |
+
+**Lectura.** TVAE mejora drasticamente la utilidad y cumple la k-anonimidad que CTGAN incumplia, pero
+falla la distancia al registro mas cercano (DCR): al reproducir mejor la estructura de los datos, genera
+registros demasiado proximos a sujetos reales. Ningun generador satisface a la vez los tres criterios; la
+tension utilidad-privacidad queda explicita. Ambos conjuntos quedan restringidos al prototipado. No se
+ajustaron los umbrales al modelo (se evita el sesgo de seleccion). Documentado en la memoria (3.6), la
+Model Card y el D4.
+
+### Estado del arte (subseccion 1.2 de la memoria)
+
+**Fecha:** 2026-06-04. **Alcance:** se anade una subseccion extensa de estado del arte (1.2), que obliga
+a renumerar la introduccion (Objetivos pasa a 1.3, Impacto a 1.4, etc.). Situa el C-index 0.599 frente a
+la literatura: nomogramas y modelos de aprendizaje profundo en CPCP alcanzan C-index en torno a 0.72 [23,
+24], pero incorporan el estadio, constante en esta cohorte de estadio extenso homogeneo, lo que rebaja el
+techo de discriminacion alcanzable con covariables basales. La evidencia sobre ML frente a Cox en n
+moderado y pocos predictores [25] anticipa el KPI-3 negativo, y los factores pronosticos (ECOG, sexo)
+concuerdan con la literatura [26]. Referencias [23] a [26] anadidas a la bibliografia, citadas y
+verificadas.
+
+### Analisis de riesgos en la memoria (apartado 1.6)
+
+**Fecha:** 2026-06-04. **Alcance:** se incorpora a la memoria el analisis de riesgos del proyecto
+(probabilidad, impacto, mitigacion y estado), exigido por la rubrica y ya presente en el plan inicial
+(D0). Se hace explicito que los pivotes P1 y P2 corresponden a riesgos previstos que se materializaron y
+se gestionaron, no a desviaciones imprevistas. Se eliminan ademas las notas de andamiaje dirigidas al
+estudiante (licencia y declaracion de IA), se neutraliza la nota de los indices, se corrige la
+incoherencia PEC4/PEC5 (la defensa se nombra como defensa final del TFG) y se corrigen castellanismos en
+el abstract en ingles.

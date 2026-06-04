@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 import warnings
 from pathlib import Path
@@ -82,6 +83,20 @@ TRTR_CINDEX_STD  = 0.042
 DATASET_PATH   = PROJECT_ROOT / "output" / "nesp_nct00119613_dataset.csv"
 CV_DETAIL_PATH = PROJECT_ROOT / "output" / "cox_baseline_cv_detail.csv"
 OUTPUT_DIR     = PROJECT_ROOT / "output"
+
+# Sintetizador a usar: "ctgan" (por defecto) o "tvae". Se selecciona con la variable de
+# entorno SYNTH_MODEL para poder generar y comparar ambos sin sobrescribir los artefactos:
+# el modelo alternativo escribe con sufijo (p.ej. synthetic_metrics_tvae.json). Los umbrales
+# de aceptacion (ACCEPT) permanecen FIJOS y preregistrados, no se ajustan al modelo elegido.
+SYNTH_MODEL   = os.environ.get("SYNTH_MODEL", "ctgan").lower()
+MODEL_SUFFIX  = "" if SYNTH_MODEL == "ctgan" else f"_{SYNTH_MODEL}"
+
+
+# Devuelve la ruta de salida con el sufijo del modelo (vacio para CTGAN, _tvae para TVAE),
+# de modo que los artefactos del modelo alternativo no pisan los del CTGAN principal.
+def _out(name: str) -> Path:
+    p = Path(name)
+    return OUTPUT_DIR / f"{p.stem}{MODEL_SUFFIX}{p.suffix}"
 
 # Colores corporativos (style_guide.md)
 C_DARK  = "#1F4E79"
@@ -241,6 +256,31 @@ def _train_ctgan(df: pd.DataFrame, epochs: int, seed_offset: int = 0):
     return synth
 
 
+# Instancia y entrena un TVAESynthesizer (SDV >= 1.0) sobre el dataframe recibido.
+# TVAE es un autoencoder variacional para datos tabulares: en lugar del esquema adversario de
+# CTGAN, maximiza una cota inferior de la verosimilitud (ELBO), lo que suele estabilizar el
+# entrenamiento y preservar mejor las correlaciones en tamanos muestrales pequenos como el de
+# esta cohorte (n=479). Se entrena con las MISMAS epocas y metadatos que CTGAN para que la
+# comparacion de utilidad y de riesgo sea directa; los umbrales de aceptacion no se modifican.
+def _train_tvae(df: pd.DataFrame, epochs: int, seed_offset: int = 0):
+    from sdv.single_table import TVAESynthesizer
+    _set_global_seeds(SEED + seed_offset)
+    meta = _build_sdv_metadata(df)
+    synth = TVAESynthesizer(meta, epochs=epochs)  # epocas fijadas a priori
+    synth.fit(df)
+    return synth
+
+
+# Despacha al sintetizador seleccionado por SYNTH_MODEL (ctgan por defecto, tvae alternativo).
+# Centraliza la eleccion para que tanto el generador principal como los shadow models del
+# ataque de membership inference usen la MISMA familia de modelo, manteniendo la coherencia
+# del analisis de riesgo de reidentificacion.
+def _train_synth(df: pd.DataFrame, epochs: int, seed_offset: int = 0):
+    if SYNTH_MODEL == "tvae":
+        return _train_tvae(df, epochs, seed_offset)
+    return _train_ctgan(df, epochs, seed_offset)
+
+
 # Corrige tipos y recorta rangos del dataset sintético al espacio plausible del dataset real.
 # CTGAN puede generar valores fuera del dominio clinico valido (p.ej., tiempos negativos,
 # indicadores de evento fuera de {0,1} o niveles de ECOG no definidos). Esta funcion aplica:
@@ -302,8 +342,9 @@ def generate_synthetic(df_real: pd.DataFrame, logger: logging.Logger) -> pd.Data
     cols   = [c for c in ALL_COLS if c in df_real.columns]
     df_fit = df_real[cols].reset_index(drop=True)
 
-    logger.info("Entrenando CTGAN principal (epocas=%d, n_real=%d)...", MAIN_EPOCHS, len(df_fit))
-    synth  = _train_ctgan(df_fit, epochs=MAIN_EPOCHS, seed_offset=0)
+    logger.info("Entrenando sintetizador %s principal (epocas=%d, n_real=%d)...",
+                SYNTH_MODEL.upper(), MAIN_EPOCHS, len(df_fit))
+    synth  = _train_synth(df_fit, epochs=MAIN_EPOCHS, seed_offset=0)
 
     logger.info("Generando %d registros sintéticos...", N_SYNTHETIC)
     df_syn = synth.sample(num_rows=N_SYNTHETIC)
@@ -481,7 +522,7 @@ def membership_inference_shadow(
         df_shadow = df_real[cols].iloc[train_idx].reset_index(drop=True)
 
         try:
-            synth_s  = _train_ctgan(df_shadow, epochs=SHADOW_EPOCHS, seed_offset=200 + si)
+            synth_s  = _train_synth(df_shadow, epochs=SHADOW_EPOCHS, seed_offset=200 + si)
             df_syn_s = synth_s.sample(num_rows=n)
             df_syn_s = _postprocess(df_syn_s, df_real)
             feats_ok = [c for c in FEATURES if c in df_syn_s.columns]
@@ -933,7 +974,7 @@ def main() -> int:
     # -------------------------------------------------------------------
     logger.info("\n=== 1. GENERACION DE DATOS SINTETICOS ===")
     df_syn = generate_synthetic(df_real, logger)
-    syn_path = OUTPUT_DIR / "synthetic_dataset.csv"
+    syn_path = _out("synthetic_dataset.csv")
     df_syn.to_csv(syn_path, index=False)
     logger.info(
         "Dataset sintético guardado: %s (%d filas). "
@@ -948,7 +989,7 @@ def main() -> int:
     tstr = evaluate_tstr(df_real, df_syn, logger)
 
     if tstr:
-        cmp_path = OUTPUT_DIR / "synthetic_tstr_comparison.csv"
+        cmp_path = _out("synthetic_tstr_comparison.csv")
         tstr["per_fold_df"].to_csv(cmp_path, index=False)
         logger.info("Guardado: %s", cmp_path.name)
 
@@ -977,11 +1018,11 @@ def main() -> int:
     # -------------------------------------------------------------------
     logger.info("\n=== 6. FIGURAS ===")
     if tstr:
-        _plot_tstr(tstr, OUTPUT_DIR / "fig_synthetic_tstr.png", logger)
+        _plot_tstr(tstr, _out("fig_synthetic_tstr.png"), logger)
     if mi:
-        _plot_membership(mi, OUTPUT_DIR / "fig_synthetic_membership.png", logger)
-    _plot_dcr(dcr,   OUTPUT_DIR / "fig_synthetic_dcr.png",   logger)
-    _plot_kanon(kanon, OUTPUT_DIR / "fig_synthetic_kanon.png", logger)
+        _plot_membership(mi, _out("fig_synthetic_membership.png"), logger)
+    _plot_dcr(dcr,   _out("fig_synthetic_dcr.png"),   logger)
+    _plot_kanon(kanon, _out("fig_synthetic_kanon.png"), logger)
 
     # -------------------------------------------------------------------
     # 7. JSON de metricas
@@ -999,7 +1040,7 @@ def main() -> int:
     metrics = {
         "disclaimer":   DISCLAIMER,
         "generation":   {
-            "method":      "CTGAN (SDV >= 1.0)",
+            "method":      f"{SYNTH_MODEL.upper()} (SDV >= 1.0)",
             "epochs":      MAIN_EPOCHS,
             "n_real":      int(len(df_real)),
             "n_synthetic": int(len(df_syn)),
@@ -1015,7 +1056,7 @@ def main() -> int:
         "overall_accepted":    overall,
     }
 
-    metrics_path = OUTPUT_DIR / "synthetic_metrics.json"
+    metrics_path = _out("synthetic_metrics.json")
     with open(metrics_path, "w", encoding="utf-8") as fh:
         json.dump(metrics, fh, ensure_ascii=False, indent=2)
     logger.info("Guardado: %s", metrics_path.name)
