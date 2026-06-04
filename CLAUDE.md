@@ -84,7 +84,7 @@ tests/             pruebas (smoke tests del pipeline)
 - D4 Paquete de transparencia (TRIPOD+AI, Model Card final, analisis de riesgos): completo. Generado en `output/D4_paquete_transparencia.docx` (generador `docs/scripts/build_d4.js`); fuente viva en `docs/D4_paquete_transparencia.md` y `docs/model_card.md`. Pendiente manual: F9 y exportar a PDF.
 - D5 Presentacion y guion de defensa: completo. Presentacion en `output/D5_presentacion.pptx` (generador `docs/scripts/build_d5.js`, libreria pptxgenjs) y guion cronometrado a 20 minutos en `output/D5_guion.md`. Pendiente manual: grabar el video de la exposicion y exportar la presentacion a PDF.
 
-Sprints: 1 a 6 cerrados; Sprint 7 (redaccion y TRIPOD+AI) cerrado; Sprint 8 (entorno limpio, release y defensa) casi cerrado: release versionado de D1 hecho y KPI-1 verificado; pendiente solo la grabacion del video de defensa. Entrega final PEC4: 02/06/2026.
+Sprints: 1 a 6 cerrados; Sprint 7 (redaccion y TRIPOD+AI) cerrado; Sprint 8 (entorno limpio, release y defensa) casi cerrado: release versionado de D1 hecho y KPI-1 verificado; pendiente solo la grabacion del video de defensa. Entrega final PEC4: 06/06/2026.
 
 KPIs: KPI-1 reproducibilidad, KPI-2 calidad de datos, KPI-3 rendimiento (mejora sobre baseline), KPI-4 calibracion, KPI-5 evaluacion etico-legal.
 

@@ -111,7 +111,7 @@ function figureBox(slide, file, x, y, w, h) {
     { text: "\nSemestre:  ", options: { bold: true, color: C.blueLight } },
     { text: "2025.1", options: { color: C.white } },
   ], { x: 1.0, y: 4.75, w: 9.0, h: 1.7, fontFace: FONT, fontSize: 15, align: "left", valign: "top", lineSpacingMultiple: 1.25, margin: 0 });
-  s.addText("Defensa PEC4 | 02/06/2026", {
+  s.addText("Entrega PEC4 | 06/06/2026", {
     x: W - 5.0, y: H - 0.7, w: 4.3, h: 0.4, fontFace: FONT, fontSize: 12, color: C.blueLight,
     align: "right", margin: 0,
   });
