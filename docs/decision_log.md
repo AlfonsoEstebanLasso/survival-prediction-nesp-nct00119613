@@ -324,17 +324,17 @@ cabecera ni código. Estilo del proyecto: sin tildes, sin enie y sin guiones lar
 **Verificación:** el flujo de tokens es idéntico al previo en los 20 ficheros (solo se añaden
 comentarios) y los 34 smoke tests siguen pasando.
 
-### Revisión de marcas de IA y referencias a Claude en el código
+### Revisión de marcas de IA y referencias al asistente en el código
 
 **Fecha:** 2026-06-02. **Alcance:** auditar el repositorio para que el código y los entregables
 no contengan marcas de agua de IA ni referencias al asistente.
 
 **Resultado:** sin caracteres invisibles sospechosos (ZWSP, BOM intercalado, etc.) en los 33
-ficheros de texto. Sin referencias a Claude en los entregables D3 y D5. Se corrigen las referencias
+ficheros de texto. Sin referencias al asistente de IA en los entregables D3 y D5. Se corrigen las referencias
 encontradas en código y entregables: docstring de src/data/etl_nesp_nct00119613.py, comentario de
 src/preprocessing/build_preprocessor.py y la línea de fuentes del paquete D4 (build_d4.js y
 docs/D4_paquete_transparencia.md), con regeneración del D4 (0 referencias tras el cambio). Los
-ficheros propios del entorno de trabajo (CLAUDE.md, .claude/settings.json y la sección del README)
+ficheros propios del entorno de trabajo (la configuración del asistente y la sección del README)
 se tratan aparte por ser configuración de desarrollo, no código del pipeline.
 
 ### Verificación cruzada del pipeline contra el protocolo y el diccionario de variables
