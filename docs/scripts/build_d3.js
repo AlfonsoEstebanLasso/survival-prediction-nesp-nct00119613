@@ -596,7 +596,9 @@ A(table([
   ["PFS", "XGBoost 10 var", "0.546 [0.517, 0.577]", "0.183", "8.5"],
 ], { aligns: [AlignmentType.LEFT, AlignmentType.LEFT, AlignmentType.CENTER, AlignmentType.CENTER, AlignmentType.CENTER] }));
 A(tableCaption("Estrategia 2: rendimiento anidado por endpoint y modelo (C-index con IC95% bootstrap, IBS y coeficiente de variación entre folds)."));
+A(...figureBlock("fig_strategy2_models.png", "Estrategia 2: discriminación (C-index con IC95% bootstrap) de cada modelo frente al baseline de 7 variables, por endpoint."));
 A(pc("El mejor modelo de la Estrategia 2 fue el Cox elastic-net en ambos endpoints; el Random Survival Forest y el XGBoost no mejoraron al baseline, lo que refuerza el carácter casi lineal de la superficie pronóstica en esta cohorte. La selección embebida retuvo casi todo el pool, y las dos señales nuevas, LDH y EPO, se seleccionaron en los cinco folds de ambos endpoints. El contraste de significación se operacionalizó con un bootstrap pareado de la diferencia de C-index sobre las predicciones out-of-fold, restringido a la comparación relevante (Cox elastic-net frente a baseline). En el endpoint primario (OS) la diferencia fue +0.014 con IC95% [-0.008, +0.036], que incluye el cero: no hay mejora significativa. En el secundario (PFS) fue +0.024 con IC95% [+0.001, +0.046]; el intervalo excluye el cero, pero por un margen mínimo (límite inferior +0.001) y en un endpoint de discriminación intrínsecamente débil. Es un resultado en el umbral de la significación y frágil, que proviene además de uno de dos contrastes, por lo que se reporta como hallazgo exploratorio y no como evidencia robusta de mejora."));
+A(...figureBlock("fig_strategy2_paired.png", "Estrategia 2: diferencia pareada de C-index entre el Cox elastic-net y el baseline, con IC95% bootstrap pareado. En OS el intervalo incluye el cero (sin mejora significativa); en PFS lo excluye por un margen mínimo."));
 A(pc("En conjunto, el efecto es pequeño, sin significación en el primario y solo en el umbral en el secundario, y el KPI-3 sigue sin cumplirse en el endpoint primario. El modelo final del trabajo continúa siendo el Cox del pipeline primario; el aporte de la Estrategia 2 es metodológico (un esquema de validación anidada sin sesgo de selección, con selección embebida e hiperparámetros confinados al bucle interno), no un modelo de mayor rendimiento."));
 
 // ============================================================================
@@ -775,6 +777,7 @@ A(table([
   ["Transfusión previa", "3", "4"],
 ], { aligns: [AlignmentType.LEFT, AlignmentType.CENTER, AlignmentType.CENTER] }));
 A(tableCaption("Frecuencia de selección de cada variable por el Cox elastic-net en los 5 folds externos, por endpoint."));
+A(...figureBlock("fig_strategy2_selection.png", "Estrategia 2: número de folds externos (de 5) en los que el Cox elastic-net retiene cada variable, por endpoint. LDH y EPO se seleccionan en los cinco folds; la transfusión, de prevalencia muy baja, es la menos retenida."));
 A(pc("Los artefactos de la Estrategia 2 (dataset derivado propio con su hash SHA-256 de referencia, diccionario, manifiesto, métricas anidadas y resultado del test pareado) se generan con los scripts de extracción y de validación cruzada anidada del repositorio, en paralelo a los del primario y sin modificarlos. El dataset a nivel de sujeto no se versiona por privacidad por diseño; solo se publican metadatos."));
 
 // ============================================================================
