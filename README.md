@@ -1,88 +1,91 @@
-# TFG: prediccion de supervivencia bajo quimioterapia (NCT00119613)
+# Survival prediction under chemotherapy (NCT00119613)
 
-Prototipo reproducible de investigacion para predecir supervivencia (OS y PFS) en una
-cohorte oncologica a partir de variables clinicas basales, con evaluacion robusta,
-control anti-leakage y documentacion transparente.
+Reproducible research prototype for predicting survival (OS and PFS) in an
+oncology cohort from baseline clinical variables, with robust evaluation,
+anti-leakage controls and transparent documentation.
 
-**Advertencia:** este repositorio es un prototipo academico. No es un dispositivo
-clinico y no debe usarse con fines clinicos ni para decisiones sobre pacientes.
+**Disclaimer:** this repository is an academic prototype. It is not a clinical
+device and must not be used for clinical purposes or patient-level decisions.
 
-Trabajo Final de Grado, Grado en Ciencia de Datos (UOC), semestre 2025.1.
-Estudiante: Alfonso Esteban Lasso.
+Bachelor's thesis (TFG) — BSc in Applied Data Science, Universitat Oberta de
+Catalunya (UOC), 2025–2026. Author: Alfonso Esteban Lasso.
 
-## Estructura del repositorio
+> Development history is preserved as-is: commit messages are in Spanish, as is
+> most of the internal documentation under `docs/`.
+
+## Repository structure
 
 ```
-src/data/              ETL y generacion de datos sinteticos
-src/preprocessing/     preprocesado dentro de la validacion (anti-leakage)
-src/models/            Cox PH, RSF, XGBoost y comparativa
-src/evaluation/        C-index, IBS, Brier, calibracion, robustez, interpretabilidad
-src/reporting/         figuras y tablas para la memoria
+src/data/              ETL and synthetic data generation
+src/preprocessing/     preprocessing fitted inside the validation loop (anti-leakage)
+src/models/            Cox PH, RSF, XGBoost and model comparison
+src/evaluation/        C-index, IBS, Brier, calibration, robustness, interpretability
+src/reporting/         figures and tables for the thesis report
 docs/                  decision_log.md, model_card.md, style_guide.md
-data/                  metadatos (datos crudos en "SAS dataset/", no versionada)
-output/                artefactos generados en ejecucion (no versionados)
-tests/                 smoke tests del pipeline
-environment.yml        entorno conda con versiones exactas congeladas (Sprint 8)
-requirements.txt       equivalente pip con versiones exactas
+data/                  metadata only (raw data lives in "SAS dataset/", never versioned)
+output/                run artifacts (not versioned)
+tests/                 pipeline smoke tests
+environment.yml        conda environment with exact pinned versions
+requirements.txt       pip equivalent with exact pinned versions
 ```
 
-## Datos de entrada
+## Input data
 
-La cohorte procede del estudio NESP-Oncology-20010145 (NCT00119613), disponible
-en Project Data Sphere. Los datos clinicos crudos no se incluyen por privacidad
-por diseno.
+The cohort comes from the NESP-Oncology-20010145 study (NCT00119613), available
+through Project Data Sphere. Raw clinical data is excluded by design for privacy
+reasons and per the data-use agreement.
 
-1. Solicitar acceso en Project Data Sphere (NCT00119613).
-2. Colocar los ficheros `.sas7bdat` en la carpeta `SAS dataset/` en la raiz del proyecto.
+1. Request access on Project Data Sphere (NCT00119613).
+2. Place the `.sas7bdat` files in a `SAS dataset/` folder at the project root.
 
-Ni los datos crudos ni el dataset derivado a nivel de sujeto se versionan.
+Neither the raw data nor the derived subject-level dataset is ever versioned.
 
-## Puesta en marcha del entorno
+## Environment setup
 
-Con conda (recomendado para reproducibilidad estricta):
+With conda (recommended for strict reproducibility):
 
 ```bash
 conda env create -f environment.yml
 conda activate tfg-nesp
 ```
 
-Con pip:
+With pip:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Verificar la instalacion:
+Verify the installation:
 
 ```bash
 python -c "import pandas, numpy, sksurv, sdv; print('OK')"
 pytest tests/ -q
 ```
 
-## Ejecucion de extremo a extremo
+## End-to-end execution
 
-Ejecutar todos los pasos desde la raiz del proyecto con el entorno activado.
-Los artefactos se escriben en `output/` (gitignoreado).
+Run every step from the project root with the environment activated.
+Artifacts are written to `output/` (gitignored).
 
-### Paso 1: ETL y construccion del dataset derivado
+### Step 1: ETL and derived dataset construction
 
 ```bash
 python src/data/etl_nesp_nct00119613.py
 ```
 
-Genera: `output/nesp_nct00119613_dataset.csv`, diccionario y manifiesto de calidad.
-Prerequisito: ficheros `.sas7bdat` en `SAS dataset/`.
+Produces `output/nesp_nct00119613_dataset.csv`, a data dictionary and a quality
+manifest. Prerequisite: `.sas7bdat` files in `SAS dataset/`.
 
-### Paso 2: Modelado (Cox, RSF, XGBoost y comparativa)
+### Step 2: Modeling (Cox, RSF, XGBoost and comparison)
 
 ```bash
 python src/models/compare_models.py
 ```
 
-Ejecuta los tres modelos con CV k=5 y bootstrap n=1000, y guarda la tabla
-comparativa en `output/model_comparison.csv`.
+Runs the three models with k=5 CV and n=1000 bootstrap, and writes the
+comparison table to `output/model_comparison.csv`.
 
-Si se quiere ejecutar un modelo por separado:
+To run a single model:
 
 ```bash
 python src/models/cox_baseline.py
@@ -90,87 +93,91 @@ python src/models/rsf_model.py
 python src/models/xgb_model.py
 ```
 
-### Paso 3: Evaluacion completa del modelo final (Cox PH)
+### Step 3: Full evaluation of the final model (Cox PH)
 
 ```bash
 python src/evaluation/eval_cox_final.py
 ```
 
-Genera calibracion, Brier Score y AUC dinamica con bandas bootstrap para OS y PFS.
+Produces calibration, Brier score and dynamic AUC with bootstrap bands for OS
+and PFS.
 
-### Paso 4: Robustez e interpretabilidad
+### Step 4: Robustness and interpretability
 
 ```bash
 python src/evaluation/robustness_cox.py
 python src/evaluation/interpretability_cox.py
 ```
 
-Genera analisis por subgrupos y valores SHAP.
+Produces subgroup analyses and SHAP values.
 
-### Paso 5: Datos sinteticos y riesgo de reidentificacion (Sprint 6)
+### Step 5: Synthetic data and re-identification risk
 
 ```bash
 python src/data/synthetic_data.py
 ```
 
-Genera el dataset sintetico con CTGAN, evalua utilidad TSTR, membership inference
-con shadow models, k-anonimidad y DCR. Tiempo estimado: 1-3 minutos en CPU.
+Generates a synthetic dataset with CTGAN, then evaluates TSTR utility,
+membership inference with shadow models, k-anonymity and DCR. Estimated
+runtime: 1–3 minutes on CPU.
 
-Artefactos principales: `output/synthetic_metrics.json` y cuatro figuras PNG.
-El dataset sintetico (`output/synthetic_dataset.csv`) no se versiona.
+Main artifacts: `output/synthetic_metrics.json` and four PNG figures.
+The synthetic dataset itself (`output/synthetic_dataset.csv`) is not versioned.
 
-**Advertencia:** los datos sinteticos son solo para prototipado metodologico;
-no refuerzan las conclusiones del modelo principal.
+**Note:** synthetic data is for methodological prototyping only; it does not
+reinforce the conclusions of the main model.
 
-## Orden recomendado para una ejecucion completa
+## Recommended order for a full run
 
 ```
-Paso 1  ->  Paso 2  ->  Paso 3  ->  Paso 4  ->  Paso 5
+Step 1  ->  Step 2  ->  Step 3  ->  Step 4  ->  Step 5
 ```
 
-Cada paso lee los artefactos del anterior desde `output/`. No se puede saltar el ETL.
+Each step reads the previous step's artifacts from `output/`. The ETL step
+cannot be skipped.
 
-## Ejecucion de los tests
+## Running the tests
 
 ```bash
 pytest tests/ -v
 ```
 
-Los smoke tests cubren:
+The smoke tests cover:
 
-- `test_preprocessor.py`: imputador adaptativo y pipeline de preprocesado.
-- `test_pipeline_smoke.py`: anti-leakage, semillas, predicciones OOF y C-index.
-- `test_synthetic_smoke.py`: k-anonimidad, DCR y criterios de aceptacion a priori.
+- `test_preprocessor.py`: adaptive imputer and preprocessing pipeline.
+- `test_pipeline_smoke.py`: anti-leakage, seeding, OOF predictions and C-index.
+- `test_synthetic_smoke.py`: k-anonymity, DCR and pre-registered acceptance criteria.
 
-Todos los tests usan datos sinteticos generados internamente; no requieren el
-dataset real.
+All tests use internally generated synthetic data; the real dataset is not
+required.
 
-## Control de versiones del entorno
+## Environment version control
 
-Las versiones exactas de los paquetes estan congeladas en `environment.yml` y
-`requirements.txt` (Sprint 8, 2026-06-01). Para generar un fichero de lock exacto:
+Exact package versions are frozen in `environment.yml` and `requirements.txt`.
+To generate an exact lock file:
 
 ```bash
 pip freeze > requirements.lock.txt
 ```
 
-## Anti-leakage: garantias del pipeline
+## Anti-leakage: pipeline guarantees
 
-- El preprocesador (imputacion, escalado, codificacion) se ajusta exclusivamente
-  sobre el fold de entrenamiento dentro del CV k=5.
-- Los predictores son variables basales: AGE, SEXCD, B_ECOGN, B_WEIGHT, CADIAGM,
-  B_HGB y MEDHX_N. Nunca se incluyen outcomes (DTH, DTHDY, PFSCD, PFSDY) ni TXG.
-- La busqueda de hiperparametros (Optuna) opera sobre splits internos del fold de
-  entrenamiento; el fold de test nunca se usa para seleccionar hiperparametros.
-- El bootstrap evalua predicciones OOF (nunca datos de entrenamiento del fold).
-- La ausencia de leakage se verifica por la estabilidad del rendimiento entre folds
-  (CV% < 10 %) y por los smoke tests de `test_pipeline_smoke.py`.
+- The preprocessor (imputation, scaling, encoding) is fitted exclusively on the
+  training fold inside the k=5 CV loop.
+- Predictors are baseline variables: AGE, SEXCD, B_ECOGN, B_WEIGHT, CADIAGM,
+  B_HGB and MEDHX_N. Outcomes (DTH, DTHDY, PFSCD, PFSDY) and TXG are never
+  included.
+- Hyperparameter search (Optuna) operates on inner splits of the training fold;
+  the test fold is never used for hyperparameter selection.
+- Bootstrap evaluates OOF predictions (never the fold's training data).
+- Absence of leakage is checked via performance stability across folds
+  (CV% < 10%) and the smoke tests in `test_pipeline_smoke.py`.
 
-## Reproducibilidad
+## Reproducibility
 
-Semilla global: `SEED = 42` (definida en `src/models/cv_utils.py` e importada
-por todos los scripts). Para reproducir exactamente los resultados:
+Global seed: `SEED = 42` (defined in `src/models/cv_utils.py` and imported by
+every script). To reproduce results exactly:
 
-1. Usar el mismo entorno: `conda env create -f environment.yml`.
-2. Colocar los mismos datos crudos en `SAS dataset/`.
-3. Ejecutar los pasos en orden.
+1. Use the same environment: `conda env create -f environment.yml`.
+2. Place the same raw data in `SAS dataset/`.
+3. Run the steps in order.
