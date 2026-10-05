@@ -23,7 +23,7 @@ src/evaluation/        C-index, IBS, Brier, calibration, robustness, interpretab
 src/reporting/         figures and tables for the thesis report
 docs/                  decision_log.md, model_card.md, style_guide.md
 data/                  metadata only (raw data lives in "SAS dataset/", never versioned)
-output/                run artifacts (not versioned)
+outputs/                run artifacts (not versioned)
 tests/                 pipeline smoke tests
 environment.yml        conda environment with exact pinned versions
 requirements.txt       pip equivalent with exact pinned versions
