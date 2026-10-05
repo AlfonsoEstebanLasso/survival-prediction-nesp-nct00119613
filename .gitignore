@@ -52,3 +52,6 @@ docs/build/
 Thumbs.db
 .vscode/
 .idea/
+CLAUDE.md
+.claude/
+settings.json
