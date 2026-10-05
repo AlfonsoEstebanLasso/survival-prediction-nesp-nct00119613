@@ -1,0 +1,33 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "Survival prediction under chemotherapy (NCT00119613): Cox PH, RSF and XGBoost with anti-leakage cross-validation, calibration and synthetic-data privacy analysis"
+authors:
+  - family-names: "Esteban Lasso"
+    given-names: "Alfonso"
+    orcid: "https://orcid.org/0009-0006-4029-6178"
+version: "1.0.0"
+date-released: "2026-10-05"
+repository-code: "https://github.com/AlfonsoEstebanLasso/survival-prediction-nesp-nct00119613"
+license: MIT
+keywords:
+  - survival analysis
+  - clinical trials
+  - oncology
+  - synthetic data
+  - data privacy
+  - biostatistics
+  - machine learning
+  - reproducible research
+abstract: "Reproducible research prototype for predicting overall and progression-free survival under chemotherapy from baseline clinical variables of a phase 3 oncology trial (NCT00119613, Project Data Sphere): Cox proportional hazards, random survival forest and XGBoost with anti-leakage cross-validation, calibration, robustness and interpretability analyses, and a synthetic-data privacy study (CTGAN, TSTR, membership inference, k-anonymity, DCR). Code of the bachelor's thesis for the BSc in Applied Data Science, Universitat Oberta de Catalunya, 2026. Academic prototype; not a clinical device."
+references:
+  - type: thesis
+    title: "Predicción de respuesta a fármacos quimioterapéuticos a partir de datos clínicos anonimizados"
+    authors:
+      - family-names: "Esteban Lasso"
+        given-names: "Alfonso"
+    thesis-type: "Bachelor's thesis"
+    institution:
+      name: "Universitat Oberta de Catalunya"
+    year: 2026
+    url: "https://hdl.handle.net/10609/156325"
