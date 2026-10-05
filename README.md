@@ -27,6 +27,8 @@ outputs/                run artifacts (not versioned)
 tests/                 pipeline smoke tests
 environment.yml        conda environment with exact pinned versions
 requirements.txt       pip equivalent with exact pinned versions
+tools/                 KPI-1 reproducibility check: PowerShell script and reference SHA-256 hashes of the ETL outputs
+package.json           Node tooling to build the thesis report, transparency package and slides (docs/scripts/)
 ```
 
 ## Input data
