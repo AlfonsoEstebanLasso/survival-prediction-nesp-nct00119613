@@ -1,5 +1,6 @@
 # Survival prediction under chemotherapy (NCT00119613)
-
+[![DOI](https://zenodo.org/badge/1350727925.svg)](https://doi.org/10.5281/zenodo.23211552)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 Reproducible research prototype for predicting survival (OS and PFS) in an
 oncology cohort from baseline clinical variables, with robust evaluation,
 anti-leakage controls and transparent documentation.
@@ -183,3 +184,27 @@ every script). To reproduce results exactly:
 1. Use the same environment: `conda env create -f environment.yml`.
 2. Place the same raw data in `SAS dataset/`.
 3. Run the steps in order.
+
+## How to cite
+
+Use the metadata in `CITATION.cff` (GitHub shows a "Cite this repository"
+button) or the references below. Cite the thesis the code comes from and,
+if you use the code, its archived version on Zenodo:
+
+Esteban Lasso, A. (2026). *Predicción de respuesta a fármacos
+quimioterapéuticos a partir de datos clínicos anonimizados*. Bachelor's
+thesis, Universitat Oberta de Catalunya. <https://hdl.handle.net/10609/156325>
+
+Esteban Lasso, A. (2026). *Survival prediction under chemotherapy
+(NCT00119613): Cox PH, RSF and XGBoost with anti-leakage cross-validation,
+calibration and synthetic-data privacy analysis* (v1.0.0) [Computer
+software]. Zenodo. <https://doi.org/10.5281/zenodo.23211553>
+
+The DOI <https://doi.org/10.5281/zenodo.23211552> resolves to the latest
+version.
+
+## License
+
+The author's code is released under the MIT License (see `LICENSE`). The
+thesis report is linked under its own CC BY-NC-ND 4.0 licence and is not
+redistributed here. The clinical data are not part of this repository.
