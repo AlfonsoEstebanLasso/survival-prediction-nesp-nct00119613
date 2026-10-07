@@ -7,7 +7,15 @@ authors:
     given-names: "Alfonso"
     orcid: "https://orcid.org/0009-0006-4029-6178"
 version: "1.0.0"
-date-released: "2026-10-05"
+date-released: "2026-10-07"
+doi: 10.5281/zenodo.23211553
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.23211552
+    description: "Concept DOI; resolves to the latest version."
+  - type: doi
+    value: 10.5281/zenodo.23211553
+    description: "DOI of version 1.0.0."
 repository-code: "https://github.com/AlfonsoEstebanLasso/survival-prediction-nesp-nct00119613"
 license: MIT
 keywords:
